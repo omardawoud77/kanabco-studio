@@ -23,7 +23,10 @@ STRICT EXCLUSIONS — the image must NOT contain any of:
 - Gradients, vignettes, environmental shadows extending beyond the product
 - Any human figures, hands, body parts, faces, reflections
 - Any other furniture or props
-Only the product itself, with a soft contact shadow directly beneath it where it touches the ground, on the clean background described above.`;
+Only the product itself, with a soft contact shadow directly beneath it where it touches the ground, on the clean background described above.
+
+REFERENCE STYLE — match this visual format:
+Premium editorial furniture catalog photography. Almost-monochromatic composition: a single product sitting in a vast empty field of soft cool-light-gray (#F0F0EE), no environment, no surface, no horizon. The product fills the lower-middle of the frame with calm, spacious negative space above and around it. Lighting is flat, even, top-front, like a studio softbox — colors are true to the product, no warm cast, no cool cast. The contact shadow beneath the product is BARELY visible — a faint, soft halo rather than a defined shadow. The overall feel is calm, restrained, expensive — the kind of hero shot on a luxury Italian furniture brand's catalog page.`;
 }
 
 function preservationBlock(enabled: boolean): string {
@@ -119,6 +122,9 @@ Framing: tight crop — the subject fills 70-80% of the frame. Not a small float
 Soft directional lighting from the upper left to show depth. Shallow depth of field, gentle bokeh in the background. Keep a clean #F0F0EE backdrop (cool light gray, RGB 240/240/238, NOT pure white, NOT warm, NOT cream) — no environment, no surface, no horizon.
 
 The image must NOT contain any logos, brand names, wordmarks, signatures, watermarks, text, arrows, icons, glyphs, UI elements, corner marks, or any other graphic mark.
+
+REFERENCE STYLE — match this visual format:
+Premium tactile material photography. Extreme close-up where the fabric weave, fiber, stitching, or surface texture is the dominant visual element. Every thread, fold, crease, and micro-shadow is rendered with crisp detail. Lighting is soft and directional from the upper-left, revealing the material's structure and depth. Background is a soft, blurred, neutral off-white field with gentle creamy bokeh — out of focus, not competing for attention. The feel is the detail-shot you'd see on a luxury Italian furniture brand's product page.
 
 Style: premium tactile material photography, photorealistic, the kind of detail shot used on a luxury furniture brand's website.${preservation}`;
   }
