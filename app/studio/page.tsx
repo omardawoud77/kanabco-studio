@@ -370,13 +370,50 @@ function Studio() {
 
       let finalImage = { data: result.imageBase64, mime: result.mimeType };
 
-      // For catalog-style shots: mechanically recompose, then composite logo
+      // For catalog-style shots: do a second Gemini pass that replaces the
+      // backdrop with flat #EDEAE3, then composite the logo on top. If the
+      // second pass fails for any reason, fall back to the legacy flood-fill
+      // recomposition so the demo doesn't break.
       if (isCatalogShot) {
+        const BG_REPLACE_PROMPT =
+          "Replace the entire background of this image with flat solid #EDEAE3 (RGB 237, 234, 227). " +
+          "Keep the product exactly as is, every pixel of the product preserved, only the background changes. " +
+          "The result must have the product on a perfectly flat #EDEAE3 field, no shadows except a soft " +
+          "contact shadow directly under the product, no gradient, no texture, no studio backdrop.";
+
+        let secondPassOk = false;
         try {
-          finalImage = await recomposeProduct(finalImage.data, finalImage.mime);
+          console.log('[Studio] POST /api/generate — second pass: bg replacement');
+          const bgRes = await fetch('/api/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              prompt: BG_REPLACE_PROMPT,
+              sourceImage: finalImage.data,
+              sourceMime: finalImage.mime,
+            }),
+          });
+          if (!bgRes.ok) {
+            throw new Error((await bgRes.text()) || `bg replacement returned ${bgRes.status}`);
+          }
+          const bgResult = await bgRes.json();
+          if (!bgResult.imageBase64) throw new Error('bg replacement returned no image');
+          finalImage = { data: bgResult.imageBase64, mime: bgResult.mimeType || 'image/png' };
+          secondPassOk = true;
+          console.log('[Studio] bg-replacement second pass: ok');
         } catch (e: any) {
-          console.warn('Recomposition failed:', e?.message);
+          console.warn('[Studio] bg-replacement second pass FAILED, falling back to recomposeProduct:', e?.message);
         }
+
+        // Fallback: only run the old flood-fill cutout if the second Gemini pass failed.
+        if (!secondPassOk) {
+          try {
+            finalImage = await recomposeProduct(finalImage.data, finalImage.mime);
+          } catch (e: any) {
+            console.warn('Recomposition fallback failed:', e?.message);
+          }
+        }
+
         try {
           finalImage = await compositeLogo(finalImage.data, finalImage.mime);
         } catch (e: any) {
