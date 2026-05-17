@@ -5,14 +5,14 @@ function studioStandards(): string {
   return `Kanabco brand format (match exactly):
 
 BACKGROUND:
-- Background: warm cream, hex #EDEAE3, RGB (237, 234, 227). This EXACT color, flat and uniform across the entire frame. No other shade, no warmer, no cooler, no lighter, no darker. Not white. Not gray. Not beige. Exactly #EDEAE3. The background must be a single solid color edge to edge. NO studio backdrop, NO floor, NO surface, NO platform, NO horizon line, NO cyc wall, NO gradient, NO vignette, NO color variation anywhere. The product sits directly on this flat #EDEAE3 field with only a very soft contact shadow directly beneath the product where it touches the ground.
+- Background: cool light gray, very subtle, almost white but with a faint cool gray tint, NOT warm, NOT beige, NOT cream. Hex #F0F0EE, RGB (240, 240, 238). This EXACT color, flat and uniform across the entire frame. No other shade, no warmer, no cooler, no lighter, no darker. Not white. Not warm. Not beige. Not cream. Exactly #F0F0EE. The background must be a single solid color edge to edge. NO studio backdrop, NO floor, NO surface, NO platform, NO horizon line, NO cyc wall, NO gradient, NO vignette, NO color variation anywhere. The product sits directly on this flat #F0F0EE field with only a very soft contact shadow directly beneath the product where it touches the ground.
 
 COMPOSITION (CRITICAL — read carefully):
 - Vertical portrait orientation, 2:3 aspect ratio (image taller than wide, roughly 1024×1536 pixels).
 - The product is SMALL within the frame. It should occupy ONLY about 25-30% of the total image height. Do NOT fill the frame with the product.
 - The product is positioned in the LOWER HALF of the image. Its top edge starts roughly 50-55% down from the top of the image, and its bottom rests around 70-75% down.
 - The product is horizontally centered with comfortable margins on left and right (do not let it touch the side edges).
-- The entire UPPER HALF of the image (top 50%) is EMPTY #EDEAE3 space. This is essential — generous breathing room above the product is the defining feature of this composition.
+- The entire UPPER HALF of the image (top 50%) is EMPTY #F0F0EE space. This is essential — generous breathing room above the product is the defining feature of this composition.
 - The bottom ~25% of the image is also mostly empty (product sits ABOVE the bottom edge, not flush against it).
 - Think editorial magazine layout: a small product floating in a large field of negative space, not a cropped close-up.
 
@@ -20,7 +20,7 @@ LIGHTING:
 - Soft, even studio lighting from upper-front, producing one subtle natural ground shadow directly beneath the product.
 
 UPPER AREA:
-- Leave the top 18% of the image as completely clean, empty #EDEAE3 space. Do NOT draw, render, hallucinate, or paint any logo, text, wordmark, signature, watermark, brand name, letterforms, or graphic mark in this area. The top must be perfectly empty #EDEAE3 — a real logo will be composited onto this space afterwards. Treat the top as untouched canvas.`;
+- Leave the top 18% of the image as completely clean, empty #F0F0EE space. Do NOT draw, render, hallucinate, or paint any logo, text, wordmark, signature, watermark, brand name, letterforms, or graphic mark in this area. The top must be perfectly empty #F0F0EE — a real logo will be composited onto this space afterwards. Treat the top as untouched canvas.`;
 }
 
 function preservationBlock(enabled: boolean): string {
@@ -111,7 +111,7 @@ Style: high-end furniture catalog photography, photorealistic, sharp detail, mag
 
 The material should be rendered ${fabricDesc} — faithfully showing structure, light absorption, and micro-shadows in the texture.
 
-Soft directional lighting from the upper left to show depth. Shallow depth of field, gentle bokeh in the background. Keep a clean #EDEAE3 backdrop (warm cream, RGB 237/234/227, NOT pure white, NOT gray) — no environment, no surface, no horizon. Do not include any logo, text, or watermark.
+Soft directional lighting from the upper left to show depth. Shallow depth of field, gentle bokeh in the background. Keep a clean #F0F0EE backdrop (cool light gray, RGB 240/240/238, NOT pure white, NOT warm, NOT cream) — no environment, no surface, no horizon. Do not include any logo, text, or watermark.
 
 Style: premium tactile material photography, photorealistic, the kind of detail shot used on a luxury furniture brand's website.${preservation}`;
   }

@@ -34,7 +34,7 @@ function loadImage(src: string): Promise<HTMLImageElement> {
  *
  *  1. Probe source pixels.
  *  2. Measure each pixel's Euclidean distance from the locked target
- *     color #EDEAE3. Pixels within ~50 units count as backdrop; pixels
+ *     color #F0F0EE. Pixels within ~50 units count as backdrop; pixels
  *     within ~25 are dead-center and fully erased, the band 25–50 gets
  *     a linear alpha ramp for a soft shadow falloff.
  *  3. Flood-fill from the canvas edges using the target-relative test
@@ -88,10 +88,10 @@ async function recomposeProduct(base64: string, mime: string): Promise<{ data: s
   });
 
   // TARGET-RELATIVE BG DETECTION — measure Euclidean distance from each
-  // pixel to the locked target color (#EDEAE3). Any drift Gemini introduces
+  // pixel to the locked target color (#F0F0EE). Any drift Gemini introduces
   // (warmer, cooler, lighter, darker) gets caught uniformly. Replaces the
   // old adaptive-range sampling.
-  const TARGET_R = 237, TARGET_G = 234, TARGET_B = 227;
+  const TARGET_R = 240, TARGET_G = 240, TARGET_B = 238;
 
   const isBgAt = (i: number): boolean => {
     const r = pixels[i], g = pixels[i + 1], b = pixels[i + 2];
@@ -188,7 +188,7 @@ async function recomposeProduct(base64: string, mime: string): Promise<{ data: s
   out.height = outH;
   const outCtx = out.getContext('2d');
   if (!outCtx) throw new Error('No canvas context');
-  outCtx.fillStyle = '#EDEAE3';
+  outCtx.fillStyle = '#F0F0EE';
   outCtx.fillRect(0, 0, outW, outH);
   outCtx.imageSmoothingEnabled = true;
   outCtx.imageSmoothingQuality = 'high';
@@ -371,15 +371,17 @@ function Studio() {
       let finalImage = { data: result.imageBase64, mime: result.mimeType };
 
       // For catalog-style shots: do a second Gemini pass that replaces the
-      // backdrop with flat #EDEAE3, then composite the logo on top. If the
+      // backdrop with flat #F0F0EE, then composite the logo on top. If the
       // second pass fails for any reason, fall back to the legacy flood-fill
       // recomposition so the demo doesn't break.
       if (isCatalogShot) {
         const BG_REPLACE_PROMPT =
-          "Replace the entire background of this image with flat solid #EDEAE3 (RGB 237, 234, 227). " +
+          "Replace the entire background of this image with flat solid #F0F0EE (RGB 240, 240, 238). " +
           "Keep the product exactly as is, every pixel of the product preserved, only the background changes. " +
-          "The result must have the product on a perfectly flat #EDEAE3 field, no shadows except a soft " +
-          "contact shadow directly under the product, no gradient, no texture, no studio backdrop.";
+          "The result must have the product on a perfectly flat #F0F0EE field, no shadows except a soft " +
+          "contact shadow directly under the product, no gradient, no texture, no studio backdrop. " +
+          "Do NOT add any arrows, icons, watermarks, glyphs, text, symbols, or marks anywhere in the image. " +
+          "The frame contains ONLY the product and its contact shadow on the flat #F0F0EE background.";
 
         let secondPassOk = false;
         try {
