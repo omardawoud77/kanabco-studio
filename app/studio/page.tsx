@@ -33,12 +33,15 @@ function loadImage(src: string): Promise<HTMLImageElement> {
  * MECHANICAL RECOMPOSITION (flood-fill alpha cutout, graduated falloff).
  *
  *  1. Probe source pixels.
- *  2. Flood-fill from the canvas edges. Connectivity test is binary
- *     (avg > 200 && sat < 25) — wide enough to reach Gemini's
- *     ~205-215 studio backdrop. For each pixel the fill reaches, alpha
- *     is set on a linear ramp: avg=200 → 255 (opaque), avg=235 → 0
- *     (transparent), anything brighter clamps to 0. This gives a soft
- *     falloff at the shadow/backdrop boundary instead of a hard cliff.
+ *  2. Sample 8 edge points (corners + edge midpoints), keep the ones
+ *     with low saturation as the "backdrop reference". Derive a per-image
+ *     bg brightness range from those samples (min - 10, max + 30) — so
+ *     whether Gemini emits flat #F1F1F1, a dim #B0, or a vignette, we
+ *     adapt to it instead of guessing thresholds.
+ *  3. Flood-fill from the canvas edges using the adaptive bg range as
+ *     the connectivity test. For each pixel the fill reaches, alpha
+ *     tapers from 0 (near the bg range's center) to 255 (at the edges
+ *     of the range) — soft falloff at the shadow/backdrop boundary.
  *  3. Find bbox of pixels that retained any opacity (alpha > 0).
  *  4. Scale to fit BOTH height target (60% of output H) AND width cap
  *     (80% of output W). scale = min(widthScale, heightScale).
@@ -86,25 +89,58 @@ async function recomposeProduct(base64: string, mime: string): Promise<{ data: s
     bottomMid: samplePx(Math.floor(W / 2), H - 1),
   });
 
-  // Binary connectivity test — decides which pixels the flood-fill enters.
-  // Floor at 200 catches Gemini's ~205-215 studio backdrop; sat<25 keeps
-  // any tinted product fabric out of the fill regardless of brightness.
+  // ADAPTIVE BACKDROP LEARNING — sample 8 edge points (corners + edge mids),
+  // keep only the low-saturation ones (genuine backdrop, not product touching
+  // an edge), and use their range as the flood-fill's connectivity window.
+  // This adapts to whatever Gemini produced — bright #F1F1F1, dim #BC, or a
+  // vignetted gradient — without us having to guess thresholds.
+  const edgePts: Array<[number, number]> = [
+    [0, 0], [W - 1, 0], [0, H - 1], [W - 1, H - 1],
+    [Math.floor(W / 2), 0], [0, Math.floor(H / 2)],
+    [W - 1, Math.floor(H / 2)], [Math.floor(W / 2), H - 1],
+  ];
+  const bgRefAvgs: number[] = [];
+  for (const [x, y] of edgePts) {
+    const i = (y * W + x) * 4;
+    const r = pixels[i], g = pixels[i + 1], b = pixels[i + 2];
+    const avg = (r + g + b) / 3;
+    const sat = Math.max(r, g, b) - Math.min(r, g, b);
+    if (sat < 20) bgRefAvgs.push(avg);
+  }
+  // Fall back to a wide neutral default if no edge is neutral (rare —
+  // implies product fills all the way to every edge).
+  let bgMin: number, bgMax: number;
+  if (bgRefAvgs.length === 0) {
+    bgMin = 150; bgMax = 240;
+  } else {
+    bgMin = Math.min(...bgRefAvgs) - 10;   // small margin below the darkest edge
+    bgMax = Math.max(...bgRefAvgs) + 30;   // wider margin above (covers vignette + brighter pixels)
+  }
+  console.log('[Recompose] adaptive bg range:',
+    { bgMin: Math.round(bgMin), bgMax: Math.round(bgMax), neutralEdgeSamples: bgRefAvgs.map(v => Math.round(v)) });
+
+  // Binary connectivity test driven by the adaptive range.
   const isBgAt = (i: number): boolean => {
     const r = pixels[i], g = pixels[i + 1], b = pixels[i + 2];
     const avg = (r + g + b) / 3;
     const sat = Math.max(r, g, b) - Math.min(r, g, b);
-    return avg > 200 && sat < 25;
+    return sat < 20 && avg >= bgMin && avg <= bgMax;
   };
 
-  // Graduated alpha for a pixel that passed the connectivity test.
-  // avg = 200 → α=255 (fully opaque),  avg = 235 → α=0 (fully transparent),
-  // linear in between, anything brighter clamps to 0. Soft falloff at the
-  // shadow/backdrop boundary instead of a stair-stepped cliff.
+  // Graduated alpha. Map distance from the bg "core" to alpha:
+  //  - close to bg median → α=0 (fully erased)
+  //  - within bg range but at the edges → α tapers up
+  //  - outside bg range → would be α=255, but those pixels don't pass isBgAt
+  //    anyway so this branch isn't reached for them.
+  const bgMid = (bgMin + bgMax) / 2;
+  const bgHalfWidth = Math.max(1, (bgMax - bgMin) / 2);
   const alphaFor = (i: number): number => {
     const r = pixels[i], g = pixels[i + 1], b = pixels[i + 2];
     const avg = (r + g + b) / 3;
-    if (avg >= 235) return 0;
-    return Math.round((235 - avg) / 35 * 255);
+    const dist = Math.abs(avg - bgMid) / bgHalfWidth;        // 0 at median, 1 at edge of range
+    // Inner 60% of range → fully transparent. Outer 40% → linear ramp up.
+    if (dist <= 0.6) return 0;
+    return Math.round((dist - 0.6) / 0.4 * 255);
   };
 
   // Flood-fill BFS from canvas edges. Worst-case queue size = total pixels.
