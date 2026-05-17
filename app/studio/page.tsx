@@ -127,7 +127,7 @@ async function recomposeProduct(base64: string, mime: string): Promise<{ data: s
     const avg = (r + g + b) / 3;
     const sat = Math.max(r, g, b) - Math.min(r, g, b);
     if (sat < 20 && avg >= bgMin && avg <= bgMax) return true;
-    return sat < 30 && avg > 180;
+    return sat < 35 && avg > 180;
   };
 
   // Graduated alpha. Map distance from the bg "core" to alpha:
@@ -225,7 +225,7 @@ async function recomposeProduct(base64: string, mime: string): Promise<{ data: s
   out.height = outH;
   const outCtx = out.getContext('2d');
   if (!outCtx) throw new Error('No canvas context');
-  outCtx.fillStyle = '#FFFFFF';
+  outCtx.fillStyle = '#EFECE6';
   outCtx.fillRect(0, 0, outW, outH);
   outCtx.imageSmoothingEnabled = true;
   outCtx.imageSmoothingQuality = 'high';
