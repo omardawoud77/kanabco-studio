@@ -30,31 +30,28 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 }
 
 /**
- * MECHANICAL RECOMPOSITION (alpha-mask cutout).
+ * MECHANICAL RECOMPOSITION (flood-fill alpha cutout).
  *
- * Takes Gemini's generated image (often square, often with a mid-gray
- * studio backdrop) and rebuilds the composition as a clean 2:3 portrait
- * on a #F1F1F1 background, with the product cleanly cut out via a
- * per-pixel alpha mask (no rectangular bbox bleed).
- *
- *  1. Probe source pixels; mark anything matching the bg test as alpha=0.
- *     bg test: avg > 200 && sat < 20  (covers Gemini's ~180-220 studio grays)
- *  2. Find bbox of the surviving (non-bg) pixels.
- *  3. Scale to fit BOTH a height target (60% of output H) and a width cap
+ *  1. Probe source pixels.
+ *  2. Flood-fill from the canvas edges, erasing any pixel that passes
+ *     the bg test AND is reachable from outside. Bg test is tight
+ *     (avg > 230 && sat < 15) so soft drop shadows survive.
+ *  3. Find bbox of surviving pixels.
+ *  4. Scale to fit BOTH height target (60% of output H) AND width cap
  *     (80% of output W). scale = min(widthScale, heightScale).
- *  4. Output canvas is 2:3 portrait: outW = W, outH = round(W * 1.5).
- *  5. Product center sits at y = 0.65 * outH (lower-mid, leaves room for logo).
+ *  5. Output canvas inherits Gemini's native dims (no forced ratio).
+ *  6. Product center at y = 0.65 * outH; horizontally centered.
  */
 async function recomposeProduct(base64: string, mime: string): Promise<{ data: string; mime: string }> {
   const img = await loadImage(`data:${mime};base64,${base64}`);
   const W = img.naturalWidth;
   const H = img.naturalHeight;
 
-  // Output is 2:3 portrait, sized off the input width
+  // Pass through Gemini's aspect ratio — square stays square, wide stays wide.
   const outW = W;
-  const outH = Math.round(W * 1.5);
+  const outH = H;
 
-  // 1. Read the input pixels into a probe canvas, then mask alpha in place.
+  // Read source pixels
   const probe = document.createElement('canvas');
   probe.width = W;
   probe.height = H;
@@ -64,28 +61,62 @@ async function recomposeProduct(base64: string, mime: string): Promise<{ data: s
   const imgData = probeCtx.getImageData(0, 0, W, H);
   const pixels = imgData.data;
 
+  // Bg test: only erase pixels that are clearly near-white + low saturation.
+  // Soft mid-gray drop shadows (~210-225) survive as part of the product.
+  const isBgAt = (i: number): boolean => {
+    const r = pixels[i], g = pixels[i + 1], b = pixels[i + 2];
+    const avg = (r + g + b) / 3;
+    const sat = Math.max(r, g, b) - Math.min(r, g, b);
+    return avg > 230 && sat < 15;
+  };
+
+  // Flood-fill BFS from canvas edges. Worst-case queue size = total pixels.
+  const total = W * H;
+  const visited = new Uint8Array(total);
+  const queue = new Int32Array(total);
+  let qHead = 0, qTail = 0;
+  const seedIfBg = (x: number, y: number) => {
+    const cell = y * W + x;
+    if (visited[cell]) return;
+    const i = cell * 4;
+    if (isBgAt(i)) {
+      visited[cell] = 1;
+      pixels[i + 3] = 0;          // alpha-out
+      queue[qTail++] = cell;
+    }
+  };
+  for (let x = 0; x < W; x++) {
+    seedIfBg(x, 0);
+    seedIfBg(x, H - 1);
+  }
+  for (let y = 0; y < H; y++) {
+    seedIfBg(0, y);
+    seedIfBg(W - 1, y);
+  }
+  while (qHead < qTail) {
+    const cell = queue[qHead++];
+    const x = cell % W;
+    const y = (cell - x) / W;
+    if (x > 0)     seedIfBg(x - 1, y);
+    if (x < W - 1) seedIfBg(x + 1, y);
+    if (y > 0)     seedIfBg(x, y - 1);
+    if (y < H - 1) seedIfBg(x, y + 1);
+  }
+
+  // bbox of surviving (non-visited) pixels
   let minX = W, minY = H, maxX = 0, maxY = 0;
   let found = false;
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
-      const i = (y * W + x) * 4;
-      const r = pixels[i], g = pixels[i + 1], b = pixels[i + 2];
-      const avg = (r + g + b) / 3;
-      const sat = Math.max(r, g, b) - Math.min(r, g, b);
-      const isBg = avg > 200 && sat < 20;
-      if (isBg) {
-        pixels[i + 3] = 0;          // alpha-out background
-      } else {
-        if (x < minX) minX = x;
-        if (x > maxX) maxX = x;
-        if (y < minY) minY = y;
-        if (y > maxY) maxY = y;
-        found = true;
-      }
+      if (visited[y * W + x]) continue;
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+      found = true;
     }
   }
   if (!found) {
-    // Bg test ate everything — fall back to the original input
     return { data: base64, mime };
   }
   probeCtx.putImageData(imgData, 0, 0);
@@ -93,20 +124,17 @@ async function recomposeProduct(base64: string, mime: string): Promise<{ data: s
   const pBoxW = maxX - minX + 1;
   const pBoxH = maxY - minY + 1;
 
-  // 2. Sizing: fit BOTH height target and width cap (no constraint dominates).
   const TARGET_HEIGHT_RATIO = 0.60;
   const MAX_WIDTH_RATIO = 0.80;
-  const widthScale  = (MAX_WIDTH_RATIO    * outW) / pBoxW;
+  const widthScale  = (MAX_WIDTH_RATIO     * outW) / pBoxW;
   const heightScale = (TARGET_HEIGHT_RATIO * outH) / pBoxH;
   const scale = Math.min(widthScale, heightScale);
   const targetWidth  = Math.round(pBoxW * scale);
   const targetHeight = Math.round(pBoxH * scale);
 
-  // 3. Placement: horizontally centered; vertical center at 0.65 * outH.
   const destX = Math.round((outW - targetWidth) / 2);
   const destY = Math.round(0.65 * outH - targetHeight / 2);
 
-  // 4. Final canvas — 2:3 portrait, #F1F1F1 fill, masked product on top.
   const out = document.createElement('canvas');
   out.width = outW;
   out.height = outH;
@@ -116,7 +144,6 @@ async function recomposeProduct(base64: string, mime: string): Promise<{ data: s
   outCtx.fillRect(0, 0, outW, outH);
   outCtx.imageSmoothingEnabled = true;
   outCtx.imageSmoothingQuality = 'high';
-  // Source = the alpha-masked probe canvas (bg pixels are transparent)
   outCtx.drawImage(
     probe,
     minX, minY, pBoxW, pBoxH,
@@ -306,10 +333,33 @@ function Studio() {
 
   function downloadGenerated() {
     if (!generated) return;
+
+    // base64 → Uint8Array → Blob (application/octet-stream forces Safari
+    // to treat the link as a download rather than navigating to a PNG)
+    const bin = atob(generated.data);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const blob = new Blob([bytes], { type: 'application/octet-stream' });
+    const url = URL.createObjectURL(blob);
+
+    // Filesystem-safe filename: kanabco-<product>-<shot>-<ts>.png
+    const productObj = state.product && state.product !== 'one_off'
+      ? products.find(p => p.id === state.product)
+      : null;
+    const raw = productObj?.name || state.productOneOffName || 'Custom';
+    const safe = (s: string) => s.replace(/[\/\\:*?"<>|]+/g, '-').replace(/\s+/g, '-').toLowerCase();
+    const filename = `kanabco-${safe(raw)}-${safe(state.shot || 'image')}-${Date.now()}.png`;
+
     const a = document.createElement('a');
-    a.href = `data:${generated.mime};base64,${generated.data}`;
-    a.download = `kanabco-${Date.now()}.png`;
+    a.href = url;
+    a.download = filename;
+    a.rel = 'noopener';
+    a.target = '_self';
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
+    // Revoke after the click has had time to start the download
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   function copyPrompt() {
