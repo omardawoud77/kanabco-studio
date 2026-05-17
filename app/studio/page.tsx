@@ -213,6 +213,10 @@ function Studio() {
 
   const [analyzing, setAnalyzing] = useState(false);
 
+  // When the user hand-edits the prompt textarea, we stash their text here.
+  // null = use the auto-built prompt; string = user override (even "" is treated as deliberate).
+  const [promptOverride, setPromptOverride] = useState<string | null>(null);
+
   useEffect(() => {
     (async () => {
       const supabase = createClient();
@@ -236,7 +240,10 @@ function Studio() {
     })();
   }, []);
 
-  const prompt = buildPrompt(state, products);
+  const computedPrompt = buildPrompt(state, products);
+  // Effective prompt sent everywhere (Generate request, Copy, display).
+  // Hand-edit wins; otherwise use the auto-built one.
+  const prompt = promptOverride ?? computedPrompt;
   const productsInCategory = state.category ? products.filter(p => p.category_id === state.category) : [];
 
   // These shot types get the catalog treatment: recompose + logo
@@ -580,13 +587,34 @@ function Studio() {
 
       <div className="bg-navy text-white/90 rounded-2xl p-6 mt-10 mb-6">
         <div className="flex items-center justify-between mb-3">
-          <div className="font-serif italic text-lg text-white">Generated prompt</div>
+          <div className="font-serif italic text-lg text-white">
+            Prompt
+            {promptOverride !== null && (
+              <span className="ml-2 text-[10px] uppercase tracking-wider not-italic font-sans text-orange align-middle">edited</span>
+            )}
+          </div>
           <div className="flex gap-2">
+            {promptOverride !== null && (
+              <button
+                onClick={() => setPromptOverride(null)}
+                disabled={!computedPrompt}
+                className="btn btn-dark text-xs"
+                title="Discard edits and use the auto-built prompt"
+              >
+                ↺ Reset to auto
+              </button>
+            )}
             <button onClick={copyPrompt} disabled={!prompt} className="btn btn-dark text-xs">⎘ Copy</button>
           </div>
         </div>
-        <div className="font-mono text-[12.5px] leading-relaxed whitespace-pre-wrap min-h-[80px]">
-          {prompt || <span className="opacity-50 italic font-sans">Pick a product to generate your prompt…</span>}
+        <textarea
+          value={prompt ?? ''}
+          onChange={e => setPromptOverride(e.target.value)}
+          placeholder="Pick a product to generate your prompt…"
+          className="w-full font-mono text-[12.5px] leading-relaxed bg-transparent text-white/90 placeholder-white/40 placeholder:italic placeholder:font-sans focus:outline-none resize-y min-h-[200px]"
+        />
+        <div className="text-[10px] text-white/40 mt-2">
+          Edit this text to tweak what Gemini receives. Changes are sent on Generate.
         </div>
       </div>
 
