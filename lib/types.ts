@@ -61,6 +61,8 @@ export type LibraryEntry = {
   image_url: string | null;
   source_name: string | null;
   created_at: string;
+  drive_file_id: string | null;
+  drive_view_link: string | null;
 };
 
 export type Team = {

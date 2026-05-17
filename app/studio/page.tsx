@@ -167,6 +167,7 @@ function Studio() {
 
   const [analyzing, setAnalyzing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveStage, setSaveStage] = useState<'idle' | 'saving' | 'uploading' | 'done' | 'done-failed'>('idle');
 
   useEffect(() => {
     (async () => {
@@ -347,6 +348,7 @@ function Studio() {
     if (!prompt || !state.product) { toast('Pick a product first'); return; }
     if (!teamId) { toast('No workspace found'); return; }
     setSaving(true);
+    setSaveStage('saving');
     try {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
@@ -366,21 +368,62 @@ function Studio() {
       }
 
       const meta = buildEntryMeta(state, products);
-      const { error } = await supabase.from('library_entries').insert({
-        team_id: teamId,
-        user_id: user.id,
-        title: meta.title,
-        subtitle: meta.subtitle,
-        prompt,
-        state: state as any,
-        image_url: imageUrl,
-        source_name: imageFile?.name || null,
-      });
-      if (error) throw error;
+      const { data: inserted, error } = await supabase
+        .from('library_entries')
+        .insert({
+          team_id: teamId,
+          user_id: user.id,
+          title: meta.title,
+          subtitle: meta.subtitle,
+          prompt,
+          state: state as any,
+          image_url: imageUrl,
+          source_name: imageFile?.name || null,
+        })
+        .select('id')
+        .single();
+      if (error || !inserted) throw error || new Error('Insert returned no row');
       toast('Saved to library');
+
+      if (generated) {
+        setSaveStage('uploading');
+        try {
+          const productObj = state.product && state.product !== 'one_off'
+            ? products.find(p => p.id === state.product)
+            : null;
+          const productName = productObj?.name || state.productOneOffName || 'Custom';
+          const filename = `${state.shot || 'image'}-${Date.now()}.png`;
+          const imageDataUrl = `data:${generated.mime};base64,${generated.data}`;
+
+          const res = await fetch('/api/drive-upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              generationId: inserted.id,
+              imageDataUrl,
+              productName,
+              filename,
+            }),
+          });
+          if (!res.ok) {
+            const msg = await res.text().catch(() => '');
+            throw new Error(msg || `Drive upload returned ${res.status}`);
+          }
+          setSaveStage('done');
+          setTimeout(() => setSaveStage('idle'), 3000);
+        } catch (driveErr) {
+          console.error('Drive upload failed:', driveErr);
+          setSaveStage('done-failed');
+          setTimeout(() => setSaveStage('idle'), 5000);
+        }
+      } else {
+        setSaveStage('done');
+        setTimeout(() => setSaveStage('idle'), 3000);
+      }
     } catch (e: any) {
       console.error(e);
       toast('Save failed');
+      setSaveStage('idle');
     } finally {
       setSaving(false);
     }
@@ -557,7 +600,11 @@ function Studio() {
           <div className="font-serif italic text-lg text-white">Generated prompt</div>
           <div className="flex gap-2">
             <button onClick={saveToLibrary} disabled={!prompt || saving} className="btn btn-dark text-xs">
-              {saving ? '…' : '⌑ Save'}
+              {saveStage === 'saving' ? 'Saving…'
+                : saveStage === 'uploading' ? 'Uploading to Drive…'
+                : saveStage === 'done' ? '✓ Saved to Drive'
+                : saveStage === 'done-failed' ? '✓ Saved (Drive upload failed)'
+                : '⌑ Save'}
             </button>
             <button onClick={copyPrompt} disabled={!prompt} className="btn btn-dark text-xs">⎘ Copy</button>
           </div>

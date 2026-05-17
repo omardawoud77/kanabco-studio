@@ -110,6 +110,17 @@ function Library() {
                     {e.image_url && (
                       <a href={e.image_url} download className="p-1.5 rounded hover:bg-bg-soft" title="Download">↓</a>
                     )}
+                    {e.drive_view_link && (
+                      <a
+                        href={e.drive_view_link}
+                        target="_blank"
+                        rel="noopener"
+                        className="p-1.5 rounded hover:bg-bg-soft"
+                        title="Open in Drive"
+                      >
+                        Drive ↗
+                      </a>
+                    )}
                     <button onClick={() => deleteEntry(e.id)} className="p-1.5 rounded hover:bg-red-50 hover:text-red-700" title="Delete">×</button>
                   </div>
                 </div>
