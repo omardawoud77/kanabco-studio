@@ -95,17 +95,15 @@ export async function uploadToDrive(
   const fileId = uploadRes.data.id;
   if (!fileId) throw new Error('Drive upload returned no file id');
 
-  await drive.permissions.create({
-    fileId,
-    requestBody: { role: 'reader', type: 'anyone' },
-  });
-
+  // No public-share permission grant — personal Drive accounts return 403
+  // for `type: 'anyone'`. The file lives in the owner's folder; the link
+  // below opens for them once signed into the owning Google account.
   const meta = await drive.files.get({
     fileId,
     fields: 'webViewLink',
   });
-  const webViewLink = meta.data.webViewLink;
-  if (!webViewLink) throw new Error('Drive did not return webViewLink');
+  const webViewLink =
+    meta.data.webViewLink || `https://drive.google.com/file/d/${fileId}/view`;
 
   return { fileId, webViewLink };
 }
