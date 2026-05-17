@@ -30,15 +30,15 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 }
 
 /**
- * MECHANICAL RECOMPOSITION (flood-fill alpha cutout).
+ * MECHANICAL RECOMPOSITION (flood-fill alpha cutout, graduated falloff).
  *
  *  1. Probe source pixels.
- *  2. Flood-fill from the canvas edges, erasing any pixel that passes
- *     the bg test AND is reachable from outside. Bg test is tight
- *     (avg > 215 && sat < 20) — wide enough to consume Gemini's
- *     ~220-235 studio backdrop, tight enough that the chair's darker
- *     drop shadow (~195-215) survives.
- *  3. Find bbox of surviving pixels.
+ *  2. Flood-fill from the canvas edges. Connectivity test is binary
+ *     (avg > 215 && sat < 20). For each pixel the fill reaches, alpha
+ *     is set on a linear ramp: avg=215 → 255 (opaque), avg=235 → 0
+ *     (transparent), anything brighter clamps to 0. This gives a soft
+ *     falloff at the shadow/backdrop boundary instead of a hard cliff.
+ *  3. Find bbox of pixels that retained any opacity (alpha > 0).
  *  4. Scale to fit BOTH height target (60% of output H) AND width cap
  *     (80% of output W). scale = min(widthScale, heightScale).
  *  5. Output canvas inherits Gemini's native dims (no forced ratio).
@@ -63,13 +63,23 @@ async function recomposeProduct(base64: string, mime: string): Promise<{ data: s
   const imgData = probeCtx.getImageData(0, 0, W, H);
   const pixels = imgData.data;
 
-  // Bg test: only erase pixels that are clearly near-white + low saturation.
-  // Soft mid-gray drop shadows (~210-225) survive as part of the product.
+  // Binary connectivity test — decides which pixels the flood-fill enters.
   const isBgAt = (i: number): boolean => {
     const r = pixels[i], g = pixels[i + 1], b = pixels[i + 2];
     const avg = (r + g + b) / 3;
     const sat = Math.max(r, g, b) - Math.min(r, g, b);
     return avg > 215 && sat < 20;
+  };
+
+  // Graduated alpha for a pixel that passed the connectivity test.
+  // avg = 215 → α=255 (fully opaque),  avg = 235 → α=0 (fully transparent),
+  // linear in between, anything brighter clamps to 0. Creates a soft falloff
+  // at the shadow/backdrop boundary instead of a stair-stepped cliff.
+  const alphaFor = (i: number): number => {
+    const r = pixels[i], g = pixels[i + 1], b = pixels[i + 2];
+    const avg = (r + g + b) / 3;
+    if (avg >= 235) return 0;
+    return Math.round((235 - avg) / 20 * 255);
   };
 
   // Flood-fill BFS from canvas edges. Worst-case queue size = total pixels.
@@ -83,7 +93,7 @@ async function recomposeProduct(base64: string, mime: string): Promise<{ data: s
     const i = cell * 4;
     if (isBgAt(i)) {
       visited[cell] = 1;
-      pixels[i + 3] = 0;          // alpha-out
+      pixels[i + 3] = alphaFor(i);   // graduated alpha — soft falloff at shadow edge
       queue[qTail++] = cell;
     }
   };
@@ -105,12 +115,15 @@ async function recomposeProduct(base64: string, mime: string): Promise<{ data: s
     if (y < H - 1) seedIfBg(x, y + 1);
   }
 
-  // bbox of surviving (non-visited) pixels
+  // bbox of pixels with any remaining opacity. Partially-transparent
+  // gradient pixels along the shadow edge stay IN so the soft falloff
+  // is carried through to the final composite.
   let minX = W, minY = H, maxX = 0, maxY = 0;
   let found = false;
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
-      if (visited[y * W + x]) continue;
+      const i = (y * W + x) * 4;
+      if (pixels[i + 3] === 0) continue;
       if (x < minX) minX = x;
       if (x > maxX) maxX = x;
       if (y < minY) minY = y;
