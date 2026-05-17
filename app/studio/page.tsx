@@ -64,6 +64,28 @@ async function recomposeProduct(base64: string, mime: string): Promise<{ data: s
   const imgData = probeCtx.getImageData(0, 0, W, H);
   const pixels = imgData.data;
 
+  // Debug: sample corners + edge midpoints so we can see Gemini's actual backdrop range
+  const samplePx = (x: number, y: number) => {
+    const i = (y * W + x) * 4;
+    const r = pixels[i], g = pixels[i + 1], b = pixels[i + 2];
+    return {
+      rgb: `${r},${g},${b}`,
+      avg: Math.round((r + g + b) / 3),
+      sat: Math.max(r, g, b) - Math.min(r, g, b),
+    };
+  };
+  console.log('[Recompose] source dims:', W + 'x' + H);
+  console.log('[Recompose] corner+edge samples:', {
+    tl:        samplePx(0, 0),
+    tr:        samplePx(W - 1, 0),
+    bl:        samplePx(0, H - 1),
+    br:        samplePx(W - 1, H - 1),
+    topMid:    samplePx(Math.floor(W / 2), 0),
+    leftMid:   samplePx(0, Math.floor(H / 2)),
+    rightMid:  samplePx(W - 1, Math.floor(H / 2)),
+    bottomMid: samplePx(Math.floor(W / 2), H - 1),
+  });
+
   // Binary connectivity test — decides which pixels the flood-fill enters.
   // Floor at 200 catches Gemini's ~205-215 studio backdrop; sat<25 keeps
   // any tinted product fabric out of the fill regardless of brightness.
@@ -135,12 +157,18 @@ async function recomposeProduct(base64: string, mime: string): Promise<{ data: s
     }
   }
   if (!found) {
+    console.warn('[Recompose] flood-fill ate ALL pixels — falling back to raw Gemini output');
     return { data: base64, mime };
   }
   probeCtx.putImageData(imgData, 0, 0);
 
   const pBoxW = maxX - minX + 1;
   const pBoxH = maxY - minY + 1;
+  console.log('[Recompose] flood-fill consumed', qTail, 'of', total,
+              '(' + Math.round(qTail / total * 100) + '%)');
+  console.log('[Recompose] bbox:', { minX, minY, maxX, maxY, pBoxW, pBoxH },
+              'as % of canvas:',
+              Math.round(pBoxW / W * 100) + 'x' + Math.round(pBoxH / H * 100));
 
   const TARGET_HEIGHT_RATIO = 0.60;
   const MAX_WIDTH_RATIO = 0.80;
@@ -316,6 +344,15 @@ function Studio() {
     setGenerating(true);
     setGenError(null);
     setGenerated(null);
+
+    // Debug: verify the prompt actually leaves the browser as expected.
+    console.log(
+      '[Studio] POST /api/generate — prompt source:',
+      promptOverride !== null ? 'user-edited override' : 'auto-built',
+      '| length:', prompt.length
+    );
+    console.log('[Studio] prompt body:\n' + prompt);
+
     try {
       const res = await fetch('/api/generate', {
         method: 'POST',
