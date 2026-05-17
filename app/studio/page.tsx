@@ -5,7 +5,7 @@ import { NavBar } from '@/components/NavBar';
 import { ToastProvider, useToast } from '@/components/Toast';
 import { createClient } from '@/lib/supabase-browser';
 import { fabrics, colors, shots, angles, settings, details, defaultState } from '@/lib/data';
-import { buildPrompt, buildEntryMeta } from '@/lib/prompts';
+import { buildPrompt } from '@/lib/prompts';
 import type { StudioState, Category, CustomProduct } from '@/lib/types';
 
 export default function StudioPage() {
@@ -30,32 +30,40 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 }
 
 /**
- * MECHANICAL RECOMPOSITION: takes Gemini's generated image (where the product
- * often fills most of the frame) and rebuilds the composition so the product
- * is small in the lower portion of the frame, on a clean #F1F1F1 background.
+ * MECHANICAL RECOMPOSITION (alpha-mask cutout).
  *
- * Algorithm:
- *  1. Find the product's bounding box (any non-background pixel)
- *  2. Compute scale so product height = TARGET_HEIGHT_RATIO of canvas height
- *  3. Paint a clean #F1F1F1 canvas
- *  4. Draw the cropped product, scaled, positioned in lower portion
+ * Takes Gemini's generated image (often square, often with a mid-gray
+ * studio backdrop) and rebuilds the composition as a clean 2:3 portrait
+ * on a #F1F1F1 background, with the product cleanly cut out via a
+ * per-pixel alpha mask (no rectangular bbox bleed).
+ *
+ *  1. Probe source pixels; mark anything matching the bg test as alpha=0.
+ *     bg test: avg > 200 && sat < 20  (covers Gemini's ~180-220 studio grays)
+ *  2. Find bbox of the surviving (non-bg) pixels.
+ *  3. Scale to fit BOTH a height target (60% of output H) and a width cap
+ *     (80% of output W). scale = min(widthScale, heightScale).
+ *  4. Output canvas is 2:3 portrait: outW = W, outH = round(W * 1.5).
+ *  5. Product center sits at y = 0.65 * outH (lower-mid, leaves room for logo).
  */
 async function recomposeProduct(base64: string, mime: string): Promise<{ data: string; mime: string }> {
   const img = await loadImage(`data:${mime};base64,${base64}`);
   const W = img.naturalWidth;
   const H = img.naturalHeight;
 
-  // 1. Get pixel data
+  // Output is 2:3 portrait, sized off the input width
+  const outW = W;
+  const outH = Math.round(W * 1.5);
+
+  // 1. Read the input pixels into a probe canvas, then mask alpha in place.
   const probe = document.createElement('canvas');
   probe.width = W;
   probe.height = H;
   const probeCtx = probe.getContext('2d');
   if (!probeCtx) throw new Error('No canvas context');
   probeCtx.drawImage(img, 0, 0);
-  const pixels = probeCtx.getImageData(0, 0, W, H).data;
+  const imgData = probeCtx.getImageData(0, 0, W, H);
+  const pixels = imgData.data;
 
-  // 2. Find bounding box of non-background pixels.
-  // Background = near-#F1F1F1 (neutral, brightness 225-250, low saturation).
   let minX = W, minY = H, maxX = 0, maxY = 0;
   let found = false;
   for (let y = 0; y < H; y++) {
@@ -64,9 +72,10 @@ async function recomposeProduct(base64: string, mime: string): Promise<{ data: s
       const r = pixels[i], g = pixels[i + 1], b = pixels[i + 2];
       const avg = (r + g + b) / 3;
       const sat = Math.max(r, g, b) - Math.min(r, g, b);
-      // Background if: neutral (low sat) and bright (close to #F1F1F1)
-      const isBg = sat < 12 && avg > 225 && avg < 252;
-      if (!isBg) {
+      const isBg = avg > 200 && sat < 20;
+      if (isBg) {
+        pixels[i + 3] = 0;          // alpha-out background
+      } else {
         if (x < minX) minX = x;
         if (x > maxX) maxX = x;
         if (y < minY) minY = y;
@@ -76,47 +85,42 @@ async function recomposeProduct(base64: string, mime: string): Promise<{ data: s
     }
   }
   if (!found) {
-    // Nothing detected — fall back to returning original
+    // Bg test ate everything — fall back to the original input
     return { data: base64, mime };
   }
+  probeCtx.putImageData(imgData, 0, 0);
 
   const pBoxW = maxX - minX + 1;
   const pBoxH = maxY - minY + 1;
 
-  // 3. Compute target size. Product height = 32% of canvas height (gives breathing room).
-  const TARGET_HEIGHT_RATIO = 0.32;
-  const MAX_WIDTH_RATIO = 0.78; // never let product touch sides
-  const targetHeight = Math.round(H * TARGET_HEIGHT_RATIO);
-  let scale = targetHeight / pBoxH;
-  let targetWidth = Math.round(pBoxW * scale);
-  // Cap width
-  const maxWidth = Math.round(W * MAX_WIDTH_RATIO);
-  if (targetWidth > maxWidth) {
-    scale = maxWidth / pBoxW;
-    targetWidth = maxWidth;
-  }
-  const finalHeight = Math.round(pBoxH * scale);
+  // 2. Sizing: fit BOTH height target and width cap (no constraint dominates).
+  const TARGET_HEIGHT_RATIO = 0.60;
+  const MAX_WIDTH_RATIO = 0.80;
+  const widthScale  = (MAX_WIDTH_RATIO    * outW) / pBoxW;
+  const heightScale = (TARGET_HEIGHT_RATIO * outH) / pBoxH;
+  const scale = Math.min(widthScale, heightScale);
+  const targetWidth  = Math.round(pBoxW * scale);
+  const targetHeight = Math.round(pBoxH * scale);
 
-  // 4. Position: horizontally centered, product bottom at ~75% of canvas height.
-  const PRODUCT_BOTTOM_RATIO = 0.78;
-  const destX = Math.round((W - targetWidth) / 2);
-  const destBottom = Math.round(H * PRODUCT_BOTTOM_RATIO);
-  const destY = destBottom - finalHeight;
+  // 3. Placement: horizontally centered; vertical center at 0.65 * outH.
+  const destX = Math.round((outW - targetWidth) / 2);
+  const destY = Math.round(0.65 * outH - targetHeight / 2);
 
-  // 5. Build final canvas
+  // 4. Final canvas — 2:3 portrait, #F1F1F1 fill, masked product on top.
   const out = document.createElement('canvas');
-  out.width = W;
-  out.height = H;
+  out.width = outW;
+  out.height = outH;
   const outCtx = out.getContext('2d');
   if (!outCtx) throw new Error('No canvas context');
   outCtx.fillStyle = '#F1F1F1';
-  outCtx.fillRect(0, 0, W, H);
+  outCtx.fillRect(0, 0, outW, outH);
   outCtx.imageSmoothingEnabled = true;
   outCtx.imageSmoothingQuality = 'high';
+  // Source = the alpha-masked probe canvas (bg pixels are transparent)
   outCtx.drawImage(
-    img,
-    minX, minY, pBoxW, pBoxH,       // source crop
-    destX, destY, targetWidth, finalHeight  // dest
+    probe,
+    minX, minY, pBoxW, pBoxH,
+    destX, destY, targetWidth, targetHeight
   );
 
   const dataUrl = out.toDataURL('image/png');
@@ -144,7 +148,7 @@ async function compositeLogo(base64: string, mime: string): Promise<{ data: stri
   const logoWidth = targetLogoWidth;
   const logoHeight = logoImg.naturalHeight * scale;
   const logoX = (canvas.width - logoWidth) / 2;
-  const logoY = canvas.height * 0.10 - logoHeight / 2;
+  const logoY = canvas.height * 0.08 - logoHeight / 2;
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(logoImg, logoX, logoY, logoWidth, logoHeight);
@@ -166,8 +170,6 @@ function Studio() {
   const [genError, setGenError] = useState<string | null>(null);
 
   const [analyzing, setAnalyzing] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [saveStage, setSaveStage] = useState<'idle' | 'saving' | 'uploading' | 'done' | 'done-failed'>('idle');
 
   useEffect(() => {
     (async () => {
@@ -344,95 +346,6 @@ function Studio() {
     toast('Saved to catalog');
   }
 
-  async function saveToLibrary() {
-    if (!prompt || !state.product) { toast('Pick a product first'); return; }
-    if (!teamId) { toast('No workspace found'); return; }
-    setSaving(true);
-    setSaveStage('saving');
-    try {
-      const supabase = createClient();
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Not signed in');
-
-      let imageUrl: string | null = null;
-      if (generated) {
-        const bin = Uint8Array.from(atob(generated.data), c => c.charCodeAt(0));
-        const fileName = `${teamId}/${Date.now()}.png`;
-        const { error: upErr } = await supabase.storage
-          .from('generated-images')
-          .upload(fileName, bin, { contentType: generated.mime, upsert: false });
-        if (!upErr) {
-          const { data } = supabase.storage.from('generated-images').getPublicUrl(fileName);
-          imageUrl = data.publicUrl;
-        }
-      }
-
-      const meta = buildEntryMeta(state, products);
-      const { data: inserted, error } = await supabase
-        .from('library_entries')
-        .insert({
-          team_id: teamId,
-          user_id: user.id,
-          title: meta.title,
-          subtitle: meta.subtitle,
-          prompt,
-          state: state as any,
-          image_url: imageUrl,
-          source_name: imageFile?.name || null,
-        })
-        .select('id')
-        .single();
-      if (error || !inserted) throw error || new Error('Insert returned no row');
-      toast('Saved to library');
-
-      if (generated) {
-        setSaveStage('uploading');
-        try {
-          const productObj = state.product && state.product !== 'one_off'
-            ? products.find(p => p.id === state.product)
-            : null;
-          const productName = productObj?.name || state.productOneOffName || 'Custom';
-          const filename = `${state.shot || 'image'}-${Date.now()}.png`;
-          const imageDataUrl = `data:${generated.mime};base64,${generated.data}`;
-
-          const res = await fetch('/api/drive-upload', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              generationId: inserted.id,
-              imageDataUrl,
-              productName,
-              filename,
-            }),
-          });
-          if (!res.ok) {
-            let errBody: any = null;
-            try { errBody = await res.json(); } catch { /* ignore */ }
-            const detail = errBody
-              ? `${errBody.message} (code: ${errBody.code})${errBody.details ? ' details: ' + JSON.stringify(errBody.details) : ''}`
-              : `Drive upload returned ${res.status}`;
-            console.error('[Drive upload failed]', errBody);
-            throw new Error(detail);
-          }
-          setSaveStage('done');
-          setTimeout(() => setSaveStage('idle'), 3000);
-        } catch (driveErr) {
-          console.error('Drive upload failed:', driveErr);
-          setSaveStage('done-failed');
-          setTimeout(() => setSaveStage('idle'), 5000);
-        }
-      } else {
-        setSaveStage('done');
-        setTimeout(() => setSaveStage('idle'), 3000);
-      }
-    } catch (e: any) {
-      console.error(e);
-      toast('Save failed');
-      setSaveStage('idle');
-    } finally {
-      setSaving(false);
-    }
-  }
 
   return (
     <div className="max-w-3xl mx-auto px-6 py-10">
@@ -604,13 +517,6 @@ function Studio() {
         <div className="flex items-center justify-between mb-3">
           <div className="font-serif italic text-lg text-white">Generated prompt</div>
           <div className="flex gap-2">
-            <button onClick={saveToLibrary} disabled={!prompt || saving} className="btn btn-dark text-xs">
-              {saveStage === 'saving' ? 'Saving…'
-                : saveStage === 'uploading' ? 'Uploading to Drive…'
-                : saveStage === 'done' ? '✓ Saved to Drive'
-                : saveStage === 'done-failed' ? '✓ Saved (Drive upload failed)'
-                : '⌑ Save'}
-            </button>
             <button onClick={copyPrompt} disabled={!prompt} className="btn btn-dark text-xs">⎘ Copy</button>
           </div>
         </div>
@@ -634,20 +540,7 @@ function Studio() {
               Generated image
               {isCatalogShot && <span className="text-xs text-text-muted ml-2 not-italic">· recomposed + logo</span>}
             </div>
-            <div className="flex gap-2">
-              <button
-                onClick={saveToLibrary}
-                disabled={!prompt || saving}
-                className="btn btn-secondary text-xs"
-              >
-                {saveStage === 'saving' ? 'Saving…'
-                  : saveStage === 'uploading' ? 'Uploading to Drive…'
-                  : saveStage === 'done' ? '✓ Saved to Drive'
-                  : saveStage === 'done-failed' ? '✓ Saved (Drive upload failed)'
-                  : '⌑ Save'}
-              </button>
-              <button onClick={downloadGenerated} className="btn btn-secondary text-xs">↓ Download</button>
-            </div>
+            <button onClick={downloadGenerated} className="btn btn-secondary text-xs">↓ Download</button>
           </div>
           <img
             src={`data:${generated.mime};base64,${generated.data}`}
