@@ -35,7 +35,9 @@ function loadImage(src: string): Promise<HTMLImageElement> {
  *  1. Probe source pixels.
  *  2. Flood-fill from the canvas edges, erasing any pixel that passes
  *     the bg test AND is reachable from outside. Bg test is tight
- *     (avg > 230 && sat < 15) so soft drop shadows survive.
+ *     (avg > 215 && sat < 20) — wide enough to consume Gemini's
+ *     ~220-235 studio backdrop, tight enough that the chair's darker
+ *     drop shadow (~195-215) survives.
  *  3. Find bbox of surviving pixels.
  *  4. Scale to fit BOTH height target (60% of output H) AND width cap
  *     (80% of output W). scale = min(widthScale, heightScale).
@@ -67,7 +69,7 @@ async function recomposeProduct(base64: string, mime: string): Promise<{ data: s
     const r = pixels[i], g = pixels[i + 1], b = pixels[i + 2];
     const avg = (r + g + b) / 3;
     const sat = Math.max(r, g, b) - Math.min(r, g, b);
-    return avg > 230 && sat < 15;
+    return avg > 215 && sat < 20;
   };
 
   // Flood-fill BFS from canvas edges. Worst-case queue size = total pixels.
