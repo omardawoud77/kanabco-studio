@@ -406,8 +406,13 @@ function Studio() {
             }),
           });
           if (!res.ok) {
-            const msg = await res.text().catch(() => '');
-            throw new Error(msg || `Drive upload returned ${res.status}`);
+            let errBody: any = null;
+            try { errBody = await res.json(); } catch { /* ignore */ }
+            const detail = errBody
+              ? `${errBody.message} (code: ${errBody.code})${errBody.details ? ' details: ' + JSON.stringify(errBody.details) : ''}`
+              : `Drive upload returned ${res.status}`;
+            console.error('[Drive upload failed]', errBody);
+            throw new Error(detail);
           }
           setSaveStage('done');
           setTimeout(() => setSaveStage('idle'), 3000);

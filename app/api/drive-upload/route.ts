@@ -54,8 +54,23 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({ success: true, viewLink: webViewLink });
-  } catch (e: any) {
-    const message = e?.message || 'Drive upload failed';
-    return NextResponse.json({ message }, { status: 500 });
+  } catch (err: any) {
+    const errorMessage = err?.message || 'Unknown error';
+    const errorCode = err?.code || err?.status || 'NO_CODE';
+    const errorDetails = err?.errors || err?.response?.data || null;
+    console.error('[drive-upload] FAILED:', {
+      message: errorMessage,
+      code: errorCode,
+      details: errorDetails,
+      stack: err?.stack,
+    });
+    return NextResponse.json(
+      {
+        message: errorMessage,
+        code: errorCode,
+        details: errorDetails,
+      },
+      { status: 500 }
+    );
   }
 }
