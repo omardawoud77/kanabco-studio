@@ -34,8 +34,9 @@ function loadImage(src: string): Promise<HTMLImageElement> {
  *
  *  1. Probe source pixels.
  *  2. Flood-fill from the canvas edges. Connectivity test is binary
- *     (avg > 215 && sat < 20). For each pixel the fill reaches, alpha
- *     is set on a linear ramp: avg=215 → 255 (opaque), avg=235 → 0
+ *     (avg > 200 && sat < 25) — wide enough to reach Gemini's
+ *     ~205-215 studio backdrop. For each pixel the fill reaches, alpha
+ *     is set on a linear ramp: avg=200 → 255 (opaque), avg=235 → 0
  *     (transparent), anything brighter clamps to 0. This gives a soft
  *     falloff at the shadow/backdrop boundary instead of a hard cliff.
  *  3. Find bbox of pixels that retained any opacity (alpha > 0).
@@ -64,22 +65,24 @@ async function recomposeProduct(base64: string, mime: string): Promise<{ data: s
   const pixels = imgData.data;
 
   // Binary connectivity test — decides which pixels the flood-fill enters.
+  // Floor at 200 catches Gemini's ~205-215 studio backdrop; sat<25 keeps
+  // any tinted product fabric out of the fill regardless of brightness.
   const isBgAt = (i: number): boolean => {
     const r = pixels[i], g = pixels[i + 1], b = pixels[i + 2];
     const avg = (r + g + b) / 3;
     const sat = Math.max(r, g, b) - Math.min(r, g, b);
-    return avg > 215 && sat < 20;
+    return avg > 200 && sat < 25;
   };
 
   // Graduated alpha for a pixel that passed the connectivity test.
-  // avg = 215 → α=255 (fully opaque),  avg = 235 → α=0 (fully transparent),
-  // linear in between, anything brighter clamps to 0. Creates a soft falloff
-  // at the shadow/backdrop boundary instead of a stair-stepped cliff.
+  // avg = 200 → α=255 (fully opaque),  avg = 235 → α=0 (fully transparent),
+  // linear in between, anything brighter clamps to 0. Soft falloff at the
+  // shadow/backdrop boundary instead of a stair-stepped cliff.
   const alphaFor = (i: number): number => {
     const r = pixels[i], g = pixels[i + 1], b = pixels[i + 2];
     const avg = (r + g + b) / 3;
     if (avg >= 235) return 0;
-    return Math.round((235 - avg) / 20 * 255);
+    return Math.round((235 - avg) / 35 * 255);
   };
 
   // Flood-fill BFS from canvas edges. Worst-case queue size = total pixels.
