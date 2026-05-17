@@ -119,12 +119,15 @@ async function recomposeProduct(base64: string, mime: string): Promise<{ data: s
   console.log('[Recompose] adaptive bg range:',
     { bgMin: Math.round(bgMin), bgMax: Math.round(bgMax), neutralEdgeSamples: bgRefAvgs.map(v => Math.round(v)) });
 
-  // Binary connectivity test driven by the adaptive range.
+  // Binary connectivity test — adaptive range as the primary, plus a static
+  // safety net that catches any clearly-neutral pixel above avg=180 in case
+  // Gemini emits a darker backdrop the adaptive sampling didn't capture.
   const isBgAt = (i: number): boolean => {
     const r = pixels[i], g = pixels[i + 1], b = pixels[i + 2];
     const avg = (r + g + b) / 3;
     const sat = Math.max(r, g, b) - Math.min(r, g, b);
-    return sat < 20 && avg >= bgMin && avg <= bgMax;
+    if (sat < 20 && avg >= bgMin && avg <= bgMax) return true;
+    return sat < 30 && avg > 180;
   };
 
   // Graduated alpha. Map distance from the bg "core" to alpha:
@@ -222,7 +225,7 @@ async function recomposeProduct(base64: string, mime: string): Promise<{ data: s
   out.height = outH;
   const outCtx = out.getContext('2d');
   if (!outCtx) throw new Error('No canvas context');
-  outCtx.fillStyle = '#F1F1F1';
+  outCtx.fillStyle = '#FFFFFF';
   outCtx.fillRect(0, 0, outW, outH);
   outCtx.imageSmoothingEnabled = true;
   outCtx.imageSmoothingQuality = 'high';

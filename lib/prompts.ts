@@ -5,14 +5,14 @@ function studioStandards(): string {
   return `Kanabco brand format (match exactly):
 
 BACKGROUND:
-- Solid neutral light gray, hex #F1F1F1 (RGB 241,241,241) — a perfectly neutral gray-white, NOT warm, NOT cream, NOT beige, NOT ivory, NOT pure white either. R, G, and B values must all be equal so the background reads as truly neutral. Edge-to-edge, no gradient, no vignette.
+- Pure white, hex #FFFFFF (RGB 255,255,255). The background must be perfectly uniform pure white across the entire frame — NO studio backdrop, NO floor, NO surface, NO platform, NO plinth, NO horizon line, NO cyc wall, NO gradient, NO vignette, NO shadow on the floor. The product floats in pure white space with only a very soft contact shadow directly beneath where it touches the ground (no extended floor shadow, no environmental shadow).
 
 COMPOSITION (CRITICAL — read carefully):
 - Vertical portrait orientation, 2:3 aspect ratio (image taller than wide, roughly 1024×1536 pixels).
 - The product is SMALL within the frame. It should occupy ONLY about 25-30% of the total image height. Do NOT fill the frame with the product.
 - The product is positioned in the LOWER HALF of the image. Its top edge starts roughly 50-55% down from the top of the image, and its bottom rests around 70-75% down.
 - The product is horizontally centered with comfortable margins on left and right (do not let it touch the side edges).
-- The entire UPPER HALF of the image (top 50%) is EMPTY neutral gray space. This is essential — generous breathing room above the product is the defining feature of this composition.
+- The entire UPPER HALF of the image (top 50%) is EMPTY pure white space. This is essential — generous breathing room above the product is the defining feature of this composition.
 - The bottom ~25% of the image is also mostly empty (product sits ABOVE the bottom edge, not flush against it).
 - Think editorial magazine layout: a small product floating in a large field of negative space, not a cropped close-up.
 
@@ -20,7 +20,7 @@ LIGHTING:
 - Soft, even studio lighting from upper-front, producing one subtle natural ground shadow directly beneath the product.
 
 UPPER AREA:
-- Leave the top 18% of the image as completely clean, empty neutral gray space. Do NOT draw, render, hallucinate, or paint any logo, text, wordmark, signature, watermark, brand name, letterforms, or graphic mark in this area. The top must be perfectly empty gray — a real logo will be composited onto this space afterwards. Treat the top as untouched canvas.`;
+- Leave the top 18% of the image as completely clean, empty pure white space. Do NOT draw, render, hallucinate, or paint any logo, text, wordmark, signature, watermark, brand name, letterforms, or graphic mark in this area. The top must be perfectly empty white — a real logo will be composited onto this space afterwards. Treat the top as untouched canvas.`;
 }
 
 function preservationBlock(enabled: boolean): string {
@@ -111,7 +111,7 @@ Style: high-end furniture catalog photography, photorealistic, sharp detail, mag
 
 The material should be rendered ${fabricDesc} — faithfully showing structure, light absorption, and micro-shadows in the texture.
 
-Soft directional lighting from the upper left to show depth. Shallow depth of field, gentle bokeh in the background. Keep a clean neutral #F1F1F1 light gray backdrop. Do not include any logo, text, or watermark.
+Soft directional lighting from the upper left to show depth. Shallow depth of field, gentle bokeh in the background. Keep a clean pure white #FFFFFF backdrop — no environment, no surface, no horizon. Do not include any logo, text, or watermark.
 
 Style: premium tactile material photography, photorealistic, the kind of detail shot used on a luxury furniture brand's website.${preservation}`;
   }
