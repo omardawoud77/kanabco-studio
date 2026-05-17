@@ -376,12 +376,13 @@ function Studio() {
       // recomposition so the demo doesn't break.
       if (isCatalogShot) {
         const BG_REPLACE_PROMPT =
-          "Replace the entire background of this image with flat solid #F0F0EE (RGB 240, 240, 238). " +
-          "Keep the product exactly as is, every pixel of the product preserved, only the background changes. " +
-          "The result must have the product on a perfectly flat #F0F0EE field, no shadows except a soft " +
-          "contact shadow directly under the product, no gradient, no texture, no studio backdrop. " +
-          "Do NOT add any arrows, icons, watermarks, glyphs, text, symbols, or marks anywhere in the image. " +
-          "The frame contains ONLY the product and its contact shadow on the flat #F0F0EE background.";
+          "Replace ONLY the background of this image with flat solid #F0F0EE. " +
+          "Preserve the product exactly as is — every pixel, every detail, the exact position, the exact size, the exact framing. " +
+          "Do NOT reposition, resize, recompose, or modify the product in any way. " +
+          "Do NOT add or remove anything from the image except the background color. " +
+          "Keep the soft contact shadow under the product. " +
+          "The result must be: the same product in the same position, just sitting on a flat #F0F0EE field instead of whatever background was there before. " +
+          "Do NOT add any logos, arrows, watermarks, glyphs, icons, text, or marks anywhere in the image.";
 
         let secondPassOk = false;
         try {

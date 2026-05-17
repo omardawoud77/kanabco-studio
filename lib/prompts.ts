@@ -8,19 +8,22 @@ BACKGROUND:
 - Background: cool light gray, very subtle, almost white but with a faint cool gray tint, NOT warm, NOT beige, NOT cream. Hex #F0F0EE, RGB (240, 240, 238). This EXACT color, flat and uniform across the entire frame. No other shade, no warmer, no cooler, no lighter, no darker. Not white. Not warm. Not beige. Not cream. Exactly #F0F0EE. The background must be a single solid color edge to edge. NO studio backdrop, NO floor, NO surface, NO platform, NO horizon line, NO cyc wall, NO gradient, NO vignette, NO color variation anywhere. The product sits directly on this flat #F0F0EE field with only a very soft contact shadow directly beneath the product where it touches the ground.
 
 COMPOSITION (CRITICAL — read carefully):
-- Vertical portrait orientation, 2:3 aspect ratio (image taller than wide, roughly 1024×1536 pixels).
-- The product is SMALL within the frame. It should occupy ONLY about 25-30% of the total image height. Do NOT fill the frame with the product.
-- The product is positioned in the LOWER HALF of the image. Its top edge starts roughly 50-55% down from the top of the image, and its bottom rests around 70-75% down.
-- The product is horizontally centered with comfortable margins on left and right (do not let it touch the side edges).
-- The entire UPPER HALF of the image (top 50%) is EMPTY #F0F0EE space. This is essential — generous breathing room above the product is the defining feature of this composition.
-- The bottom ~25% of the image is also mostly empty (product sits ABOVE the bottom edge, not flush against it).
-- Think editorial magazine layout: a small product floating in a large field of negative space, not a cropped close-up.
+- Vertical portrait orientation, image taller than wide. The product must be LARGE within the frame — occupying 55-65% of the total image height (NOT smaller). The product is centered horizontally and positioned in the LOWER-MIDDLE of the frame: its vertical center sits at approximately 60% down from the top. Top 25% of frame is empty space (for logo composite later). Bottom 10-15% of frame is empty space below the product (so it doesn't touch the bottom edge). Generous side margins — product does not touch left or right edges. Think editorial furniture catalog: a clearly visible, prominently sized product with breathing room, not a tiny thumbnail floating in white space.
 
 LIGHTING:
-- Soft, even studio lighting from upper-front, producing one subtle natural ground shadow directly beneath the product.
+- Soft, even studio lighting from upper-front, producing one subtle natural ground shadow directly beneath the product. Cool-neutral color temperature — no warm yellow cast, no cool blue cast — colors true to the product's actual hue.
 
 UPPER AREA:
-- Leave the top 18% of the image as completely clean, empty #F0F0EE space. Do NOT draw, render, hallucinate, or paint any logo, text, wordmark, signature, watermark, brand name, letterforms, or graphic mark in this area. The top must be perfectly empty #F0F0EE — a real logo will be composited onto this space afterwards. Treat the top as untouched canvas.`;
+- Leave the top 18% of the image as completely clean, empty #F0F0EE space. Do NOT draw, render, hallucinate, or paint any logo, text, wordmark, signature, watermark, brand name, letterforms, or graphic mark in this area. The top must be perfectly empty #F0F0EE — a real logo will be composited onto this space afterwards. Treat the top as untouched canvas.
+
+STRICT EXCLUSIONS — the image must NOT contain any of:
+- Logos, wordmarks, brand names, signatures, watermarks, text of any kind
+- Arrows, icons, glyphs, UI elements, corner marks
+- Studio backdrops, cyc walls, floors, surfaces, platforms, plinths, horizon lines
+- Gradients, vignettes, environmental shadows extending beyond the product
+- Any human figures, hands, body parts, faces, reflections
+- Any other furniture or props
+Only the product itself, with a soft contact shadow directly beneath it where it touches the ground, on the clean background described above.`;
 }
 
 function preservationBlock(enabled: boolean): string {
@@ -74,7 +77,7 @@ Subject: a ${shape}. ${fabricClause(state)} Preserve every signature design feat
 
 ${studioStandards()}
 
-Style: high-end furniture catalog photography, photorealistic, sharp detail, magazine-grade. Remember: the product should be SMALL within the frame, sitting in the lower half, with generous empty gray space above and around it.${preservation}`;
+Style: high-end furniture catalog photography, photorealistic, sharp detail, magazine-grade.${preservation}`;
   }
 
   if (state.shot === 'catalog') {
@@ -84,7 +87,7 @@ Subject: a ${shape}. Keep absolutely unchanged: silhouette, proportions, every c
 
 ${studioStandards()}
 
-Style: high-end furniture catalog photography, photorealistic, sharp detail, magazine-grade. Remember: the product should be SMALL within the frame, sitting in the lower half, with generous empty gray space above and around it.${preservation}`;
+Style: high-end furniture catalog photography, photorealistic, sharp detail, magazine-grade.${preservation}`;
   }
 
   if (state.shot === 'detail') {
@@ -111,7 +114,11 @@ Style: high-end furniture catalog photography, photorealistic, sharp detail, mag
 
 The material should be rendered ${fabricDesc} — faithfully showing structure, light absorption, and micro-shadows in the texture.
 
-Soft directional lighting from the upper left to show depth. Shallow depth of field, gentle bokeh in the background. Keep a clean #F0F0EE backdrop (cool light gray, RGB 240/240/238, NOT pure white, NOT warm, NOT cream) — no environment, no surface, no horizon. Do not include any logo, text, or watermark.
+Framing: tight crop — the subject fills 70-80% of the frame. Not a small floating product on a large field; a close-up where the texture/detail is the dominant visual element.
+
+Soft directional lighting from the upper left to show depth. Shallow depth of field, gentle bokeh in the background. Keep a clean #F0F0EE backdrop (cool light gray, RGB 240/240/238, NOT pure white, NOT warm, NOT cream) — no environment, no surface, no horizon.
+
+The image must NOT contain any logos, brand names, wordmarks, signatures, watermarks, text, arrows, icons, glyphs, UI elements, corner marks, or any other graphic mark.
 
 Style: premium tactile material photography, photorealistic, the kind of detail shot used on a luxury furniture brand's website.${preservation}`;
   }
@@ -125,9 +132,13 @@ Style: premium tactile material photography, photorealistic, the kind of detail 
 
 Composition: product anchored as the hero of the scene, room visible around it, natural human-eye level perspective. Mood: warm, airy, editorial.
 
-Keep the exact product silhouette, proportions, and detailing identical to the source image — only the environment changes. Remove the original studio background. Do not include any logo, text, or watermark — this is a lifestyle shot.
+Keep the exact product silhouette, proportions, and detailing identical to the source image — only the environment changes.
 
-Style: editorial interior photography, photorealistic, soft natural light, Architectural Digest / Kinfolk quality.${preservation}`;
+The image must NOT contain any logos, brand names, wordmarks, signatures, watermarks, text, arrows, icons, or UI glyphs anywhere in the frame. The room is bare of branding.
+
+Photorealistic interior photography style, soft natural daylight from a window, warm neutral color palette, shallow depth of field. The product is the clear focal point of the room — well-lit, prominently positioned, occupying the central focus of the frame at roughly 50% of frame width.
+
+Style: editorial interior photography, photorealistic, Architectural Digest / Kinfolk quality.${preservation}`;
   }
 
   if (state.shot === 'angle') {
@@ -145,7 +156,9 @@ ${fabricClause(state)} Keep identical to source: silhouette, proportions, every 
 
 ${studioStandards()}
 
-Style: high-end furniture catalog photography, photorealistic, sharp detail, magazine-grade. Visually consistent with other Kanabco catalog shots so this image sits naturally alongside them in a product gallery. Remember: the product should be SMALL within the frame, sitting in the lower half, with generous empty gray space above and around it.${preservation}`;
+Show the product from a ${angleDesc} angle, but keep all other framing identical to a standard catalog shot: product size 55-65% of frame height, centered horizontally, vertical center at ~60% down from top.
+
+Style: high-end furniture catalog photography, photorealistic, sharp detail, magazine-grade. Visually consistent with other Kanabco catalog shots so this image sits naturally alongside them in a product gallery.${preservation}`;
   }
 
   return null;
