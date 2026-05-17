@@ -629,7 +629,20 @@ function Studio() {
               Generated image
               {isCatalogShot && <span className="text-xs text-text-muted ml-2 not-italic">· recomposed + logo</span>}
             </div>
-            <button onClick={downloadGenerated} className="btn btn-secondary text-xs">↓ Download</button>
+            <div className="flex gap-2">
+              <button
+                onClick={saveToLibrary}
+                disabled={!prompt || saving}
+                className="btn btn-secondary text-xs"
+              >
+                {saveStage === 'saving' ? 'Saving…'
+                  : saveStage === 'uploading' ? 'Uploading to Drive…'
+                  : saveStage === 'done' ? '✓ Saved to Drive'
+                  : saveStage === 'done-failed' ? '✓ Saved (Drive upload failed)'
+                  : '⌑ Save'}
+              </button>
+              <button onClick={downloadGenerated} className="btn btn-secondary text-xs">↓ Download</button>
+            </div>
           </div>
           <img
             src={`data:${generated.mime};base64,${generated.data}`}
