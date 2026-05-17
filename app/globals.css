@@ -1,0 +1,78 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html, body {
+    background: #FAFAF7;
+    color: #1A1A1A;
+    font-family: 'Manrope', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply px-4 py-2.5 rounded-md font-medium text-sm transition-all cursor-pointer border;
+  }
+  .btn-primary {
+    @apply bg-orange text-white border-orange hover:bg-orange-dark;
+  }
+  .btn-secondary {
+    @apply bg-bg-card text-text border-border hover:border-border-strong;
+  }
+  .btn-dark {
+    @apply bg-white/[0.06] text-white border-white/20 hover:bg-white/[0.12];
+  }
+  .input {
+    @apply w-full px-4 py-2.5 rounded-md border border-border bg-bg-card text-text text-sm focus:outline-none focus:border-orange transition-colors;
+  }
+  .select {
+    @apply input appearance-none cursor-pointer pr-9 disabled:opacity-40 disabled:cursor-not-allowed;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%236B6B6B' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 14px center;
+  }
+  .card-tile {
+    @apply bg-bg-card border border-border rounded-lg p-3.5 text-left cursor-pointer transition-all hover:border-border-strong hover:-translate-y-px;
+  }
+  .card-tile.active {
+    @apply border-orange bg-orange/[0.04];
+    box-shadow: 0 0 0 1px #DC6837 inset;
+  }
+  .section-num {
+    @apply font-serif italic text-orange text-sm font-medium;
+  }
+  .section-title {
+    @apply text-xs font-semibold tracking-wider uppercase;
+  }
+}
+
+/* Toast animation */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(20px);
+  background: #202D3D;
+  color: white;
+  padding: 11px 22px;
+  border-radius: 24px;
+  font-size: 13px;
+  font-weight: 500;
+  opacity: 0;
+  pointer-events: none;
+  transition: all 0.25s ease;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+  z-index: 1000;
+}
+.toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+@keyframes pulse-soft {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+.pulse-soft { animation: pulse-soft 1.5s ease-in-out infinite; }
