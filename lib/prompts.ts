@@ -162,7 +162,7 @@ ${fabricClause(state)} Keep identical to source: silhouette, proportions, every 
 
 ${studioStandards()}
 
-Show the product from a ${angleDesc} angle, but keep all other framing identical to a standard catalog shot: product size 55-65% of frame height, centered horizontally, vertical center at ~60% down from top.
+The viewing angle is the ONLY thing that changes from a standard Kanabco catalog shot. Hold all other framing identical: product size 55-65% of frame height (relative to whichever dimension is longest given the new angle — for top-down, scale to the longer of width/height), centered, with the same generous negative space around it. Background, lighting, color treatment, and shadow style match the rest of the catalog set.
 
 Style: high-end furniture catalog photography, photorealistic, sharp detail, magazine-grade. Visually consistent with other Kanabco catalog shots so this image sits naturally alongside them in a product gallery.${preservation}`;
   }
