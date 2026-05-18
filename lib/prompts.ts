@@ -167,13 +167,26 @@ Style: editorial interior photography, photorealistic, Architectural Digest / Ki
       back_quarter: 'a three-quarter rear angle showing the back and side of the piece'
     };
     const angleDesc = angleMap[state.angle] || angleMap.three_quarter;
-    return `Show this exact ${shape} from ${angleDesc}.
+    return `VIEWPOINT CHANGE — render the same product from a NEW camera angle.
 
-${fabricClause(state)} Keep identical to source: silhouette, proportions, every component position, all detailing, frame, base.
+The source image shows a ${shape}. Re-render this exact same piece of furniture — recognizably the same product (same shape language, same joinery, same materials, same proportions, same color) — but seen from ${angleDesc}.
+
+This is a viewpoint/camera-angle change. The product must be visibly rotated relative to the camera so the new angle is UNMISTAKABLE — do NOT simply reproduce the source image's viewpoint:
+- "straight-front view" = camera dead-on with the product, no rotation, perfectly head-on
+- "three-quarter front" = camera rotated ~30° off-center, slightly above
+- "side profile" = camera 90° to the side, level with the product — you see the side silhouette, NOT the front
+- "top-down flat-lay" = camera directly overhead pointing straight down — you see the top surface of the product, NOT the side
+- "three-quarter back" = camera rotated ~30° behind, you see the back and one side of the piece
+
+If the source image already happens to show ${angleDesc}, that's fine. Otherwise the rendered viewpoint MUST differ from the source — that is the entire purpose of this shot.
+
+${fabricClause(state)}
+
+Preserve the product's DESIGN DNA — the shape language, the joinery, the materials, the signature details, the color/fabric. What changes is the CAMERA POSITION, not the product itself.
 
 ${studioStandards()}
 
-The viewing angle is the ONLY thing that changes from a standard Kanabco catalog shot. Hold all other framing identical: product size 55-65% of frame height (relative to whichever dimension is longest given the new angle — for top-down, scale to the longer of width/height), centered, with the same generous negative space around it. Background, lighting, color treatment, and shadow style match the rest of the catalog set.
+Catalog framing applies: product size 55-65% of frame height (relative to whichever dimension is longest at the new angle — for top-down, scale to the longer of width/height), centered, with generous negative space. Background, lighting, color treatment, and shadow style match the rest of the catalog set.
 
 Style: high-end furniture catalog photography, photorealistic, sharp detail, magazine-grade. Visually consistent with other Kanabco catalog shots so this image sits naturally alongside them in a product gallery.${preservation}`;
   }
