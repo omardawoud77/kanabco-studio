@@ -110,9 +110,10 @@ Style: high-end furniture catalog photography, photorealistic, sharp detail, mag
     };
     const focus = focusMap[state.detail] || focusMap.fabric_texture;
     const f = fabrics.find(x => x.id === state.fabric);
+    const c = colors.find(x => x.id === state.color);
     const fabricDesc = state.fabric === 'keep' || !f
       ? 'as it appears in the source image'
-      : `${f.name.toLowerCase()} (${f.tex})`;
+      : `${f.name.toLowerCase()}${c ? ' in ' + c.desc : ''} (${f.tex})`;
     return `Take this Kanabco ${shape} and create an extreme tactile close-up: ${focus}.
 
 The material should be rendered ${fabricDesc} — faithfully showing structure, light absorption, and micro-shadows in the texture.
@@ -132,19 +133,29 @@ Style: premium tactile material photography, photorealistic, the kind of detail 
   if (state.shot === 'lifestyle') {
     const s = settings.find(x => x.id === state.setting);
     const f = fabrics.find(x => x.id === state.fabric);
+    const c = colors.find(x => x.id === state.color);
     if (!s) return null;
-    const fabricDesc = state.fabric === 'keep' || !f ? '' : ` (re-rendered in ${f.name.toLowerCase()})`;
+    const fabricDesc = state.fabric === 'keep' || !f
+      ? ''
+      : ` (re-rendered in ${f.name.toLowerCase()}${c ? ' in ' + c.desc : ''})`;
     return `Take this Kanabco ${shape}${fabricDesc} and place it inside ${s.desc}.
 
 Composition: product anchored as the hero of the scene, room visible around it, natural human-eye level perspective. Mood: warm, airy, editorial.
 
-Keep the exact product silhouette, proportions, and detailing identical to the source image — only the environment changes.
+Keep the exact product silhouette, proportions, and structural detailing identical to the source image. ${state.fabric === 'keep' || !f
+      ? 'Keep the material, color, and finish unchanged from the source.'
+      : `The material and color MUST change as specified above: re-render the upholstery in ${f.name.toLowerCase()}${c ? ' in ' + c.desc : ''}. Do not leave it the source color — apply the new color faithfully across the entire upholstered surface.`} Only the product's environment changes around it.
 
-The image must NOT contain any logos, brand names, wordmarks, signatures, watermarks, text, arrows, icons, or UI glyphs anywhere in the frame. The room is bare of branding.
+STRICT EXCLUSIONS — the image must NOT contain any of:
+- Logos, wordmarks, brand names, signatures, watermarks, text of any kind
+- Arrows (↗, ➜, or any other), icons, glyphs, UI elements, corner marks, save buttons, share buttons, Pinterest-style overlays, "external link" indicators, decorative graphic elements
+- Any other furniture or props that compete with the product as focal point
+- Human figures, hands, body parts, faces, reflections
+The room itself is bare of branding, signage, or any graphic overlay. Only the styled room and the Kanabco product within it.
 
 Photorealistic interior photography style, soft natural daylight from a window, warm neutral color palette, shallow depth of field. The product is the clear focal point of the room — well-lit, prominently positioned, occupying the central focus of the frame at roughly 50% of frame width.
 
-Style: editorial interior photography, photorealistic, Architectural Digest / Kinfolk quality.${preservation}`;
+Style: editorial interior photography, photorealistic, Architectural Digest / Kinfolk quality — but WITHOUT any of the website overlays, share-icons, or save-buttons those magazines' digital editions often have.${preservation}`;
   }
 
   if (state.shot === 'angle') {
