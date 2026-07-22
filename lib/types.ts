@@ -30,7 +30,7 @@ export type Color = {
 };
 
 export type Shot = {
-  id: 'brand_conversion' | 'catalog' | 'detail' | 'lifestyle' | 'angle';
+  id: 'brand_conversion' | 'catalog' | 'detail' | 'lifestyle' | 'angle' | 'kanabco_st';
   name: string;
   icon: string;
   desc: string;

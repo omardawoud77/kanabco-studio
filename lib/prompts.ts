@@ -1,4 +1,4 @@
-import { fabrics, colors, settings, details } from './data';
+import { fabrics, colors, settings, details, stViews } from './data';
 import type { StudioState, CustomProduct } from './types';
 
 function studioStandards(): string {
@@ -67,11 +67,73 @@ function getProductShape(state: StudioState, productCatalog: CustomProduct[]): s
   return p?.shape || null;
 }
 
+/**
+ * The slot the per-view instruction gets substituted into. The user can hand-edit
+ * the master prompt in the studio textarea — as long as this token survives, all
+ * five views inherit the edit. If they delete it, buildStSetPrompts appends the
+ * view instruction instead so the set still renders.
+ */
+export const ST_VIEW_TOKEN = '[[VIEW]]';
+
+/**
+ * KANABCO ST — the five-view catalog set, written ONCE.
+ * Every angle in the set is this exact prompt with [[VIEW]] swapped out, so all
+ * five come back as one coherent shoot rather than five unrelated renders.
+ */
+function buildStMasterPrompt(shape: string, state: StudioState): string {
+  return `KANABCO ST — SINGLE-VIEW RENDER FROM A FIVE-VIEW CATALOG SET.
+
+The attached source photo shows a ${shape}. You are re-rendering that exact piece of furniture for a five-angle Kanabco catalog set: ¾ Hero, Front 0°, Left 90°, Back 180°, Right 270°. This request renders ONE view of that set.
+
+THIS VIEW: ${ST_VIEW_TOKEN}
+
+Output exactly ONE image containing exactly ONE product from that single viewpoint. Do NOT output a grid, a contact sheet, a collage, a turntable strip, side-by-side panels, or more than one view in the frame.
+
+VIEWPOINT IS THE ONLY THING THAT CHANGES:
+This is a camera/turntable rotation, not a redesign. Think of the piece sitting on a rotating platform in a studio: the camera never moves, the product turns. Re-render the SAME piece — same silhouette, same proportions, same joinery, same seams, same cushion count and arrangement, same legs and base, same material, same colour — simply seen from the stated angle.
+- The rotation must be UNMISTAKABLE. Do NOT default to reproducing the source photo's viewpoint. If the source already happens to show this exact angle, match it; otherwise the rendered viewpoint MUST visibly differ from the source.
+- Infer the unseen sides honestly from the piece's design logic. A back at 180° should look like the genuine back of THIS sofa — same upholstery, same panel lines, same finish quality — not an invented decorative rear.
+- Every part visible in more than one view must be identical across views: same number of cushions, same seam placement, same leg style, same fabric nap direction, same colour value.
+
+SET CONSISTENCY — these five images will sit in a row on a product page:
+- Identical camera distance, identical focal length feel, identical product scale in frame across all five views. The piece must not grow or shrink between angles.
+- Identical background, identical lighting setup, identical shadow softness and direction, identical colour temperature.
+- Identical eye level: camera slightly above the seat, level horizon, no dutch tilt, no dramatic low or high angle (the ¾ Hero looks gently down; the four elevations are level).
+- The product's vertical centre sits at the same height in the frame in all five images.
+
+${fabricClause(state)}
+
+${studioStandards()}
+
+Catalog framing applies to this view: product occupies 55-65% of frame height, centred horizontally, generous negative space, clean empty top 18%. For side and rear views, scale to the piece's longest visible dimension at that angle so the product reads the same size as in the hero.
+
+Style: high-end furniture catalog photography, photorealistic, sharp detail, magazine-grade. This image must sit naturally beside the other four views of the set — a viewer scrolling the row should read it as the same object photographed once and rotated, not as five different sofas.${preservationBlock(state.preservationLock)}`;
+}
+
+/**
+ * Expands the (possibly hand-edited) master prompt into one prompt per view.
+ */
+export function buildStSetPrompts(
+  masterPrompt: string
+): { id: string; name: string; prompt: string }[] {
+  return stViews.map(v => ({
+    id: v.id,
+    name: v.name,
+    prompt: masterPrompt.includes(ST_VIEW_TOKEN)
+      ? masterPrompt.split(ST_VIEW_TOKEN).join(v.desc)
+      : `${masterPrompt}\n\nTHIS VIEW: ${v.desc}`,
+  }));
+}
+
 export function buildPrompt(state: StudioState, productCatalog: CustomProduct[]): string | null {
   const shape = getProductShape(state, productCatalog);
   if (!shape) return null;
 
   const preservation = preservationBlock(state.preservationLock);
+
+  if (state.shot === 'kanabco_st') {
+    return buildStMasterPrompt(shape, state);
+  }
 
   if (state.shot === 'brand_conversion') {
     return `Restyle this product photo as a complete Kanabco-format catalog image.
@@ -213,7 +275,8 @@ export function buildEntryMeta(
     catalog: 'Catalog',
     detail: 'Detail close-up',
     lifestyle: 'Lifestyle scene',
-    angle: 'New angle'
+    angle: 'New angle',
+    kanabco_st: 'Kanabco ST (5-view set)'
   }[state.shot];
   return {
     title: `${productName} · ${shotName}`,
