@@ -6,6 +6,7 @@ import { ToastProvider, useToast } from '@/components/Toast';
 import { createClient } from '@/lib/supabase-browser';
 import { fabrics, colors, shots, angles, settings, details, stViews, defaultState } from '@/lib/data';
 import { buildPrompt, buildStSetPrompts, buildStPortablePrompt, ST_VIEW_TOKEN } from '@/lib/prompts';
+import { normalizeBackgroundPixels } from '@/lib/bg-normalize';
 import { buildZip } from '@/lib/zip';
 import type { StudioState, Category, CustomProduct } from '@/lib/types';
 
@@ -266,24 +267,57 @@ async function requestImage(prompt: string, sourceImage?: string | null, sourceM
 }
 
 /**
+ * Deterministic background pass: samples the backdrop shade the image actually
+ * has, flood-fills it within a tight tolerance, and repaints it to the literal
+ * exact #F0F0EE — no rescale, no reposition. This is what makes all five views
+ * of a set share an identical background instead of five slightly different
+ * Gemini interpretations of the same hex. Bails out untouched whenever the
+ * image doesn't look like a product on a near-#F0F0EE field.
+ */
+async function normalizeBackground(base64: string, mime: string): Promise<GenImage> {
+  const img = await loadImage(`data:${mime};base64,${base64}`);
+  const W = img.naturalWidth;
+  const H = img.naturalHeight;
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('No canvas context');
+  ctx.drawImage(img, 0, 0);
+  const imgData = ctx.getImageData(0, 0, W, H);
+  const res = normalizeBackgroundPixels(imgData.data, W, H);
+  console.log('[BgNormalize]', res.reason, '| filled:', Math.round(res.filledFraction * 100) + '%', '| sampled backdrop:', res.medianRGB.join(','));
+  if (!res.changed) return { data: base64, mime };
+  ctx.putImageData(imgData, 0, 0);
+  return { data: canvas.toDataURL('image/png').split(',')[1], mime: 'image/png' };
+}
+
+/**
  * Catalog post-processing: second Gemini pass pulls the backdrop close to
- * #F0F0EE, then the deterministic flood-fill recompose ALWAYS runs on top —
- * it repaints the field pixel-exact #F0F0EE and normalizes product scale and
- * position, so every image in a set gets a literally identical background
- * instead of five slightly different Gemini interpretations of the same hex.
- * Finally the real logo is composited on top.
+ * #F0F0EE (flood-fill recomposition remains the fallback if that pass errors),
+ * then the deterministic color normalization ALWAYS runs on top so the field
+ * lands on the pixel-exact hex, then the real logo is composited on top.
  */
 async function finishCatalogImage(image: GenImage): Promise<GenImage> {
   let finalImage = image;
+  let secondPassOk = false;
   try {
     finalImage = await requestImage(BG_REPLACE_PROMPT, finalImage.data, finalImage.mime);
+    secondPassOk = true;
   } catch (e: any) {
-    console.warn('[Studio] bg-replacement second pass FAILED, recomposing raw output:', e?.message);
+    console.warn('[Studio] bg-replacement second pass FAILED, falling back to recomposeProduct:', e?.message);
+  }
+  if (!secondPassOk) {
+    try {
+      finalImage = await recomposeProduct(finalImage.data, finalImage.mime);
+    } catch (e: any) {
+      console.warn('Recomposition fallback failed:', e?.message);
+    }
   }
   try {
-    finalImage = await recomposeProduct(finalImage.data, finalImage.mime);
+    finalImage = await normalizeBackground(finalImage.data, finalImage.mime);
   } catch (e: any) {
-    console.warn('Recomposition failed:', e?.message);
+    console.warn('Background normalization failed:', e?.message);
   }
   try {
     finalImage = await compositeLogo(finalImage.data, finalImage.mime);
