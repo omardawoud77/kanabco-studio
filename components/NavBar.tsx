@@ -34,7 +34,7 @@ export function NavBar() {
       <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between">
         <Link href="/studio" className="flex items-center gap-2.5">
           <div className="w-7 h-7 rounded-md bg-orange flex items-center justify-center text-white font-bold text-sm">K</div>
-          <span className="font-serif text-base font-medium">Catalog Studio</span>
+          <span className="font-serif text-base font-medium">Kanabco Prompt</span>
         </Link>
         <div className="flex items-center gap-1">
           {link('/studio', 'Studio')}

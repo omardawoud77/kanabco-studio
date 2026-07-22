@@ -1,4 +1,4 @@
-# Kanabco Catalog Studio
+# Kanabco Prompt
 
 A workbench for generating on-brand product photography for Kanabco. Built with Next.js + Supabase + Gemini.
 

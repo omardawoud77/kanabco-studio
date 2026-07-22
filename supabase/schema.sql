@@ -1,5 +1,5 @@
 -- ═══════════════════════════════════════════════════════════
--- KANABCO STUDIO · SUPABASE SCHEMA
+-- KANABCO PROMPT · SUPABASE SCHEMA
 -- Run this in your Supabase SQL editor after creating a project
 -- ═══════════════════════════════════════════════════════════
 

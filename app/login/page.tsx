@@ -30,8 +30,7 @@ export default function LoginPage() {
         <div className="flex items-center gap-3 mb-10">
           <div className="w-9 h-9 rounded-lg bg-orange flex items-center justify-center text-white font-bold">K</div>
           <div>
-            <div className="font-serif text-2xl font-medium leading-none">Catalog Studio</div>
-            <div className="text-xs text-text-muted uppercase tracking-wider mt-1">Kanabco</div>
+            <div className="font-serif text-2xl font-medium leading-none">Kanabco Prompt</div>
           </div>
         </div>
 
