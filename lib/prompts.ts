@@ -117,6 +117,48 @@ Style: high-end furniture catalog photography, photorealistic, sharp detail, mag
 }
 
 /**
+ * PORTABLE variant — for pasting into ChatGPT / Gemini / any external chat.
+ *
+ * The in-app flow expands the master into five separate API calls, but a pasted
+ * single-view master produces exactly one image (with a dangling [[VIEW]] token).
+ * This rewrites it as ONE prompt that asks for FIVE SEPARATE IMAGES, the token
+ * replaced by a numbered list of all five view instructions.
+ */
+export function buildStPortablePrompt(masterPrompt: string): string {
+  const viewList = stViews
+    .map((v, i) => `${i + 1}. ${v.name} — ${v.desc}`)
+    .join('\n\n');
+
+  let p = masterPrompt;
+
+  const header = 'KANABCO ST — SINGLE-VIEW RENDER FROM A FIVE-VIEW CATALOG SET.';
+  if (p.includes(header)) {
+    p = p.replace(header, 'KANABCO ST — FULL FIVE-VIEW CATALOG SET, AS FIVE SEPARATE IMAGES.');
+  }
+
+  const singleReq = 'This request renders ONE view of that set.';
+  if (p.includes(singleReq)) {
+    p = p.replace(singleReq, 'This request renders ALL FIVE views — as five separate, individually generated images, never combined.');
+  }
+
+  const thisView = `THIS VIEW: ${ST_VIEW_TOKEN}`;
+  if (p.includes(thisView)) {
+    p = p.replace(thisView, `THE FIVE VIEWS — generate ONE IMAGE PER VIEW, in this exact order:\n\n${viewList}`);
+  } else if (p.includes(ST_VIEW_TOKEN)) {
+    p = p.split(ST_VIEW_TOKEN).join(`each of the following five views in turn (one image per view):\n\n${viewList}`);
+  } else {
+    p += `\n\nTHE FIVE VIEWS — generate ONE IMAGE PER VIEW, in this exact order:\n\n${viewList}`;
+  }
+
+  const oneImage = 'Output exactly ONE image containing exactly ONE product from that single viewpoint. Do NOT output a grid, a contact sheet, a collage, a turntable strip, side-by-side panels, or more than one view in the frame.';
+  if (p.includes(oneImage)) {
+    p = p.replace(oneImage, 'Output exactly FIVE separate images — one per view, in the order listed above. Each individual image contains exactly ONE product seen from ONE viewpoint. Never merge views into a grid, contact sheet, collage, turntable strip, or side-by-side panels within a single image. If you can only produce one image at a time, produce them one after another in order until all five are delivered.');
+  }
+
+  return p;
+}
+
+/**
  * Expands the (possibly hand-edited) master prompt into one prompt per view.
  */
 export function buildStSetPrompts(
