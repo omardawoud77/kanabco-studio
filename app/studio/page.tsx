@@ -268,11 +268,13 @@ async function requestImage(prompt: string, sourceImage?: string | null, sourceM
 
 /**
  * Deterministic background pass: samples the backdrop shade the image actually
- * has, flood-fills it within a tight tolerance, and repaints it to the literal
- * exact #F0F0EE — no rescale, no reposition. This is what makes all five views
- * of a set share an identical background instead of five slightly different
- * Gemini interpretations of the same hex. Bails out untouched whenever the
- * image doesn't look like a product on a near-#F0F0EE field.
+ * has, shifts the whole image uniformly so the field lands on the exact
+ * #F0F0EE, then softly snaps near-target pixels onto the literal hex — no
+ * rescale, no reposition, no segmentation (see lib/bg-normalize.ts for why).
+ * This is what makes all five views of a set share an identical background
+ * instead of five slightly different Gemini interpretations of the same hex.
+ * Bails out untouched whenever the image doesn't look like a product on a
+ * near-#F0F0EE field.
  */
 async function normalizeBackground(base64: string, mime: string): Promise<GenImage> {
   const img = await loadImage(`data:${mime};base64,${base64}`);
@@ -286,7 +288,7 @@ async function normalizeBackground(base64: string, mime: string): Promise<GenIma
   ctx.drawImage(img, 0, 0);
   const imgData = ctx.getImageData(0, 0, W, H);
   const res = normalizeBackgroundPixels(imgData.data, W, H);
-  console.log('[BgNormalize]', res.reason, '| filled:', Math.round(res.filledFraction * 100) + '%', '| sampled backdrop:', res.medianRGB.join(','));
+  console.log('[BgNormalize]', res.reason, '| field:', Math.round(res.fieldFraction * 100) + '%', '| sampled backdrop:', res.medianRGB.join(','));
   if (!res.changed) return { data: base64, mime };
   ctx.putImageData(imgData, 0, 0);
   return { data: canvas.toDataURL('image/png').split(',')[1], mime: 'image/png' };

@@ -4,28 +4,38 @@
  * Gemini's background pass gets each image CLOSE to the Kanabco field color,
  * but every call drifts a little differently, so the five images of an ST set
  * come back with five slightly different "#F0F0EE"s. This pass measures the
- * backdrop each image actually has (median of a border ring), flood-fills from
- * the frame edges with a TIGHT tolerance around that measured color, and
- * repaints what it reaches to the exact target hex. Geometry is untouched —
- * no rescale, no reposition.
+ * backdrop each image actually has (median of a border ring) and corrects it
+ * with two GLOBAL, BOUNDED operations:
  *
- * The tight tolerance + sampled center is what keeps light products safe:
- * a pure-white product sits ~25+ units from any plausible near-#F0F0EE
- * backdrop, and the fill's reach stops at RAMP_OUT (20).
+ *   1. a uniform white-balance shift of the whole image by (target − median),
+ *      so the field's center lands exactly on #F0F0EE and the product shifts
+ *      coherently with it — never a two-tone product;
+ *   2. a soft snap: every pixel within SNAP_IN of the target becomes exactly
+ *      the target, blending out to no change at SNAP_OUT, so the field's
+ *      residual noise flattens to the literal hex.
+ *
+ * There is deliberately NO flood fill and NO background/product segmentation:
+ * a light product tone can sit arbitrarily close to the backdrop shade, so no
+ * color gate can tell them apart — any segmenting repaint can crush an ivory
+ * or white product into the field. Here the worst case for ANY pixel is
+ * bounded: at most MAX_MEDIAN_DRIFT units of uniform shift (a white-balance
+ * correction, applied to everything equally) plus at most ~SNAP_IN units of
+ * snap — below visibility on product texture. Backdrops farther than
+ * MAX_MEDIAN_DRIFT from the target are left untouched: that's a failed Gemini
+ * pass, and mechanically recoloring it would look worse than the drift.
  */
 export const BG_TARGET_R = 240;
 export const BG_TARGET_G = 240;
 export const BG_TARGET_B = 238;
 
-const RAMP_IN = 12;          // within this distance of the sampled backdrop: fully repainted
-const RAMP_OUT = 20;         // beyond this: untouched (and the flood fill stops)
-const MAX_MEDIAN_DRIFT = 60; // sampled backdrop farther than this from target: bail out
-const MIN_FILL = 0.05;       // fill reached almost nothing: not a flat backdrop, bail out
-const MAX_FILL = 0.97;       // fill reached almost everything: it would eat the product, bail out
+const MAX_MEDIAN_DRIFT = 10; // sampled backdrop farther than this from target: bail out
+const SNAP_IN = 5;           // within this distance of the target after the shift: exactly target
+const SNAP_OUT = 12;         // beyond this: untouched; 5..12 blends linearly
+const MIN_FIELD = 0.2;       // less of the frame near-target after the shift: not a catalog field, bail out
 
 export type BgNormalizeResult = {
   changed: boolean;
-  filledFraction: number;
+  fieldFraction: number;
   medianRGB: [number, number, number];
   reason: string;
 };
@@ -56,60 +66,45 @@ export function normalizeBackgroundPixels(
   const mr = median(rs), mg = median(gs), mb = median(bs);
   const medianRGB: [number, number, number] = [mr, mg, mb];
 
-  const drift = Math.sqrt(
-    (mr - BG_TARGET_R) ** 2 + (mg - BG_TARGET_G) ** 2 + (mb - BG_TARGET_B) ** 2
-  );
+  const dR = BG_TARGET_R - mr, dG = BG_TARGET_G - mg, dB = BG_TARGET_B - mb;
+  const drift = Math.sqrt(dR * dR + dG * dG + dB * dB);
   if (drift > MAX_MEDIAN_DRIFT) {
-    return { changed: false, filledFraction: 0, medianRGB, reason: `backdrop median ${drift.toFixed(0)} units from target — not a Kanabco field, skipping` };
+    return { changed: false, fieldFraction: 0, medianRGB, reason: `backdrop median ${drift.toFixed(1)} units from target — Gemini pass failed, skipping` };
   }
 
-  // 2. Flood fill from the frame edges, gated on distance from the SAMPLED color.
-  const distAt = (i4: number) => {
-    const dr = pixels[i4] - mr, dg = pixels[i4 + 1] - mg, db = pixels[i4 + 2] - mb;
-    return Math.sqrt(dr * dr + dg * dg + db * db);
-  };
-  const factor = new Float32Array(total); // repaint strength per pixel, 0 = untouched
-  const visited = new Uint8Array(total);
-  const queue = new Int32Array(total);
-  let qh = 0, qt = 0;
-  const seed = (x: number, y: number) => {
-    const cell = y * W + x;
-    if (visited[cell]) return;
-    const d = distAt(cell * 4);
-    if (d >= RAMP_OUT) return;
-    visited[cell] = 1;
-    factor[cell] = d <= RAMP_IN ? 1 : (RAMP_OUT - d) / (RAMP_OUT - RAMP_IN);
-    queue[qt++] = cell;
-  };
-  for (let x = 0; x < W; x++) { seed(x, 0); seed(x, H - 1); }
-  for (let y = 0; y < H; y++) { seed(0, y); seed(W - 1, y); }
-  while (qh < qt) {
-    const cell = queue[qh++];
-    const x = cell % W;
-    const y = (cell - x) / W;
-    if (x > 0)     seed(x - 1, y);
-    if (x < W - 1) seed(x + 1, y);
-    if (y > 0)     seed(x, y - 1);
-    if (y < H - 1) seed(x, y + 1);
-  }
-
-  const filledFraction = qt / total;
-  if (filledFraction < MIN_FILL) {
-    return { changed: false, filledFraction, medianRGB, reason: 'fill reached almost nothing — backdrop not flat, skipping' };
-  }
-  if (filledFraction > MAX_FILL) {
-    return { changed: false, filledFraction, medianRGB, reason: 'fill reached almost everything — would eat the product, skipping' };
-  }
-
-  // 3. Repaint. Full-strength pixels land on the exact target hex; the ramp
-  //    band blends, so the contact shadow's soft edge stays soft.
+  // 2. Dry run: how much of the frame lands near the target after the shift?
+  //    (i.e. how much of the image is actually flat backdrop)
+  let nearTarget = 0;
   for (let cell = 0; cell < total; cell++) {
-    const f = factor[cell];
-    if (f === 0) continue;
     const i = cell * 4;
-    pixels[i]     = Math.round(pixels[i]     + (BG_TARGET_R - pixels[i])     * f);
-    pixels[i + 1] = Math.round(pixels[i + 1] + (BG_TARGET_G - pixels[i + 1]) * f);
-    pixels[i + 2] = Math.round(pixels[i + 2] + (BG_TARGET_B - pixels[i + 2]) * f);
+    const r = Math.max(0, Math.min(255, pixels[i] + dR));
+    const g = Math.max(0, Math.min(255, pixels[i + 1] + dG));
+    const b = Math.max(0, Math.min(255, pixels[i + 2] + dB));
+    const er = r - BG_TARGET_R, eg = g - BG_TARGET_G, eb = b - BG_TARGET_B;
+    if (er * er + eg * eg + eb * eb <= SNAP_IN * SNAP_IN) nearTarget++;
   }
-  return { changed: true, filledFraction, medianRGB, reason: 'ok' };
+  const fieldFraction = nearTarget / total;
+  if (fieldFraction < MIN_FIELD) {
+    return { changed: false, fieldFraction, medianRGB, reason: 'too little of the frame is flat backdrop — not a catalog field, skipping' };
+  }
+
+  // 3. Apply: uniform shift, then soft snap toward the exact target hex.
+  for (let cell = 0; cell < total; cell++) {
+    const i = cell * 4;
+    let r = Math.max(0, Math.min(255, pixels[i] + dR));
+    let g = Math.max(0, Math.min(255, pixels[i + 1] + dG));
+    let b = Math.max(0, Math.min(255, pixels[i + 2] + dB));
+    const er = r - BG_TARGET_R, eg = g - BG_TARGET_G, eb = b - BG_TARGET_B;
+    const d = Math.sqrt(er * er + eg * eg + eb * eb);
+    if (d <= SNAP_IN) {
+      r = BG_TARGET_R; g = BG_TARGET_G; b = BG_TARGET_B;
+    } else if (d < SNAP_OUT) {
+      const f = (SNAP_OUT - d) / (SNAP_OUT - SNAP_IN);
+      r = Math.round(r + (BG_TARGET_R - r) * f);
+      g = Math.round(g + (BG_TARGET_G - g) * f);
+      b = Math.round(b + (BG_TARGET_B - b) * f);
+    }
+    pixels[i] = r; pixels[i + 1] = g; pixels[i + 2] = b;
+  }
+  return { changed: true, fieldFraction, medianRGB, reason: 'ok' };
 }
