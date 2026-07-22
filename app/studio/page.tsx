@@ -5,7 +5,8 @@ import { NavBar } from '@/components/NavBar';
 import { ToastProvider, useToast } from '@/components/Toast';
 import { createClient } from '@/lib/supabase-browser';
 import { fabrics, colors, shots, angles, settings, details, stViews, defaultState } from '@/lib/data';
-import { buildPrompt, buildStSetPrompts, ST_VIEW_TOKEN } from '@/lib/prompts';
+import { buildPrompt, buildStSetPrompts, buildStPortablePrompt, ST_VIEW_TOKEN } from '@/lib/prompts';
+import { buildZip } from '@/lib/zip';
 import type { StudioState, Category, CustomProduct } from '@/lib/types';
 
 export default function StudioPage() {
@@ -412,17 +413,17 @@ function Studio() {
    * independent chain (generate → backdrop pass → logo) so a single failure or
    * rate-limit leaves the other four intact and retryable on its own.
    */
-  async function runStView(view: { id: string; name: string; prompt: string }) {
+  async function runStView(view: { id: string; name: string; prompt: string }): Promise<GenImage | null> {
     setStSet(prev => prev?.map(r => r.id === view.id ? { ...r, status: 'pending', error: undefined } : r) ?? prev);
     try {
       const raw = await requestImage(view.prompt, imageFile?.data, imageFile?.mime);
       const finished = await finishCatalogImage(raw);
       setStSet(prev => prev?.map(r => r.id === view.id ? { ...r, status: 'done', image: finished } : r) ?? prev);
-      return true;
+      return finished;
     } catch (e: any) {
       console.error(`[Studio] ST view "${view.id}" failed:`, e?.message);
       setStSet(prev => prev?.map(r => r.id === view.id ? { ...r, status: 'error', error: e?.message || 'Failed' } : r) ?? prev);
-      return false;
+      return null;
     }
   }
 
@@ -435,13 +436,17 @@ function Studio() {
     setStSet(views.map(v => ({ id: v.id, name: v.name, status: 'pending' as const })));
 
     console.log('[Studio] KANABCO ST — generating', views.length, 'views from one master prompt');
-    const results = await Promise.all(views.map(v => runStView(v)));
-    const ok = results.filter(Boolean).length;
+    const images = await Promise.all(views.map(v => runStView(v)));
+    const ok = images.filter(Boolean).length;
 
     setGenerating(false);
-    if (ok === views.length) toast('All 5 views generated');
+    if (ok === views.length) {
+      // The whole point of the set: one click → the five pics land as one folder.
+      downloadStZip(views.map((v, i) => ({ id: v.id, image: images[i]! })));
+      toast('All 5 views generated — set downloaded');
+    }
     else if (ok === 0) { setGenError('Every view failed — check your Gemini quota.'); toast('Set failed'); }
-    else toast(`${ok} of ${views.length} views generated — retry the rest`);
+    else toast(`${ok} of ${views.length} views generated — retry the rest, then Download set`);
   }
 
   async function generate() {
@@ -489,15 +494,15 @@ function Studio() {
     return safeName(productObj?.name || state.productOneOffName || 'Custom');
   }
 
-  function downloadImage(image: { data: string; mime: string }, filename: string) {
-    // base64 → Uint8Array → Blob (application/octet-stream forces Safari
-    // to treat the link as a download rather than navigating to a PNG)
-    const bin = atob(image.data);
+  function b64ToBytes(b64: string): Uint8Array {
+    const bin = atob(b64);
     const bytes = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-    const blob = new Blob([bytes], { type: 'application/octet-stream' });
-    const url = URL.createObjectURL(blob);
+    return bytes;
+  }
 
+  function downloadBlob(blob: Blob, filename: string) {
+    const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = filename;
@@ -510,29 +515,48 @@ function Studio() {
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
+  function downloadImage(image: { data: string; mime: string }, filename: string) {
+    // application/octet-stream forces Safari to treat the link as a download
+    // rather than navigating to a PNG.
+    downloadBlob(new Blob([b64ToBytes(image.data) as BlobPart], { type: 'application/octet-stream' }), filename);
+  }
+
   function downloadGenerated() {
     if (!generated) return;
     downloadImage(generated, `kanabco-${productSlug()}-${safeName(state.shot || 'image')}-${Date.now()}.png`);
   }
 
-  /** Numbered so the five views stay in catalog order in the user's folder. */
-  async function downloadStSet() {
+  /**
+   * The five views as ONE zip whose entries live in a folder, so extraction
+   * gives the user a folder with st-01…st-05 in catalog order. One download,
+   * no browser multi-download blocking.
+   */
+  function downloadStZip(entries: { id: string; image: GenImage }[]) {
+    const folder = `kanabco-st-${productSlug()}`;
+    const files = entries.map((e, i) => ({
+      name: `${folder}/st-${String(i + 1).padStart(2, '0')}-${e.id}.png`,
+      data: b64ToBytes(e.image.data),
+    }));
+    downloadBlob(buildZip(files), `${folder}.zip`);
+  }
+
+  function downloadStSet() {
     if (!stSet) return;
-    const stamp = Date.now();
-    let n = 0;
-    for (let i = 0; i < stSet.length; i++) {
-      const r = stSet[i];
-      if (!r.image) continue;
-      downloadImage(r.image, `kanabco-${productSlug()}-st-${String(i + 1).padStart(2, '0')}-${r.id}-${stamp}.png`);
-      n++;
-      // Browsers drop rapid-fire downloads; space them out.
-      await new Promise(res => setTimeout(res, 350));
-    }
-    toast(n === 1 ? '1 image downloaded' : `${n} images downloaded`);
+    const ready = stSet.filter((r): r is StResult & { image: GenImage } => !!r.image);
+    if (!ready.length) return;
+    downloadStZip(ready.map(r => ({ id: r.id, image: r.image })));
+    toast(ready.length === stSet.length ? 'Set downloaded' : `${ready.length} of ${stSet.length} views downloaded`);
   }
 
   function copyPrompt() {
     if (!prompt) return;
+    if (isStSet) {
+      // A pasted single-view master yields one image (with a dangling [[VIEW]]
+      // token) in ChatGPT/Gemini — copy the portable all-five-views variant.
+      navigator.clipboard.writeText(buildStPortablePrompt(prompt));
+      toast('Copied — 5-view version for ChatGPT/Gemini');
+      return;
+    }
     navigator.clipboard.writeText(prompt);
     toast('Copied');
   }
@@ -817,7 +841,7 @@ function Studio() {
               disabled={!stSet.some(r => r.image)}
               className="btn btn-secondary text-xs disabled:opacity-40"
             >
-              ↓ Download all
+              ↓ Download set (.zip)
             </button>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
