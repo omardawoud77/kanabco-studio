@@ -69,19 +69,19 @@ export const stViews = [
     id: 'left_90',
     name: 'Left 90°',
     required: false,
-    desc: 'the left side profile at 90° — the piece rotated a quarter turn so its LEFT end faces the camera. You see the side silhouette only: the depth profile, the arm or end panel, the back edge behind it. The front face is NOT visible.'
+    desc: 'a TRUE SIDE ELEVATION seen from the piece\'s LEFT end. The camera sits level with the piece, its lens axis running parallel to the sofa\'s length, aimed straight at the LEFT end panel. The left arm/end panel is the closest and dominant plane, seen flat-on like an architectural side elevation; behind it the piece\'s length recedes in compressed perspective. What IS visible: the side silhouette — arm profile, seat depth front-to-back, backrest angle. What is NOT visible: the front face of the seat cushions, the interior of the seat, the face of the back panel. CHECK before finishing: if you can see into the seat, see the fronts of the cushions, or see the back panel face-on, the camera has drifted toward a three-quarter view — that is WRONG; return to a flat 90° profile. If the piece has a chaise or extension at its far end, that extension appears at the far end of the profile projecting to its correct side — never deleted.'
   },
   {
     id: 'back_180',
     name: 'Back 180°',
     required: false,
-    desc: 'the rear elevation at 180° — the piece rotated a half turn so the camera sees the BACK of the piece square-on. Show how the back is finished: the outside back panel, seams, the top edge of the backrest from behind. The front face and seat interior are NOT visible.'
+    desc: 'the rear elevation at 180° — the camera sees the BACK of the piece square-on. Show how the back is honestly finished: the outside back panel, its seams, the top edge of the backrest from behind, the tips of any back cushions peeking above. The front face and seat interior are NOT visible. For asymmetric pieces (L-sectional / chaise): apply honest geometry — a chaise projecting forward is largely hidden behind the body from a level rear camera, and a straight-looking back is then CORRECT; but keep the module count identical to the source, and if any part of the chaise would genuinely peek beyond the silhouette at this angle, keep it visible. Never change the number of modules or invent a decorative rear.'
   },
   {
     id: 'right_270',
     name: 'Right 270°',
     required: false,
-    desc: 'the right side profile at 270° — the piece rotated three-quarters of a turn so its RIGHT end faces the camera. The mirror opposite of the Left 90° view: side silhouette only, front face NOT visible.'
+    desc: 'a TRUE SIDE ELEVATION seen from the piece\'s RIGHT end — the mirror opposite of the Left 90° view. Imagine standing at the RIGHT end of the sofa, level with it, looking along its length toward the LEFT end: that is the camera. The RIGHT end of the piece is the closest and dominant plane, seen flat-on; the rest of the piece recedes behind it in compressed perspective. Visible: the right-end silhouette — arm or end-panel profile, seat depth, backrest angle. NOT visible: the front faces of the seat cushions, the seat interior, the back panel face-on. COMMON FAILURES — both WRONG: (1) rendering from BEHIND the sofa so the long back panel dominates; (2) drifting to a three-quarter view that shows the seat interior. The camera is at the END of the piece, never behind it. If the piece has a chaise projecting forward at this end, the chaise end panel is the nearest element — render it faithfully in front of the main body, never deleted.'
   }
 ];
 

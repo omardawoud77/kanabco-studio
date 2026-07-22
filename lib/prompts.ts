@@ -95,11 +95,15 @@ This is a camera/turntable rotation, not a redesign. Think of the piece sitting 
 - Infer the unseen sides honestly from the piece's design logic. A back at 180° should look like the genuine back of THIS sofa — same upholstery, same panel lines, same finish quality — not an invented decorative rear.
 - Every part visible in more than one view must be identical across views: same number of cushions, same seam placement, same leg style, same fabric nap direction, same colour value.
 
+GEOMETRY INTEGRITY — the full footprint survives every rotation:
+- The piece's complete plan-view footprint is a fixed fact. If the piece is ASYMMETRIC — an L-sectional, a chaise end, an offset module, one arm longer than the other — that asymmetry appears in EVERY view, positioned wherever the stated rotation geometrically places it: projecting toward the camera, away from it, or to one side, possibly partially occluding or occluded. It is NEVER omitted and the piece is NEVER simplified into a symmetric sofa at any angle.
+- Before finishing, verify against the source: same number of modules, same number of seat and back cushions, same number of legs, same chaise/extension present on the geometrically correct side for this rotation.
+
 SET CONSISTENCY — these five images will sit in a row on a product page:
-- Identical camera distance, identical focal length feel, identical product scale in frame across all five views. The piece must not grow or shrink between angles.
+- Identical camera distance, identical focal length feel, identical product scale in frame across all five views. The piece must not grow or shrink between angles. A side profile is naturally narrower than the front view — that is fine — but the piece's HEIGHT in the frame must be the same as in every other view. Never compensate for a narrow silhouette by moving the camera back or rendering the piece smaller.
+- The product is CENTRED horizontally in every view, its vertical centre at the same height in the frame in all five images. Never drift the product into a corner or the lower third of the frame.
 - Identical background, identical lighting setup, identical shadow softness and direction, identical colour temperature.
 - Identical eye level: camera slightly above the seat, level horizon, no dutch tilt, no dramatic low or high angle (the ¾ Hero looks gently down; the four elevations are level).
-- The product's vertical centre sits at the same height in the frame in all five images.
 
 ${fabricClause(state)}
 
