@@ -129,6 +129,19 @@ export function buildStPortablePrompt(masterPrompt: string): string {
     .map((v, i) => `${i + 1}. ${v.name} — ${v.desc}`)
     .join('\n\n');
 
+  // Chat assistants' image tools generate ONE image per call and tend to stop
+  // there. The delivery contract has to be the very first thing they read,
+  // not a clause buried mid-document.
+  const contract = `DELIVERABLE: FIVE SEPARATE IMAGES — NOT ONE.
+
+Read this contract first, before the brief below:
+- The finished deliverable is FIVE separate images of the same product, one per camera angle in the numbered list below, in that exact order.
+- Your image tool produces ONE image per call. So you must make FIVE image-generation calls, one after another, in this same response/conversation — do NOT stop after the first image, do NOT summarize instead of generating, do NOT ask whether to continue.
+- Label each delivery: "View 1/5 — ¾ Hero", "View 2/5 — Front 0°", "View 3/5 — Left 90°", "View 4/5 — Back 180°", "View 5/5 — Right 270°".
+- Your response is INCOMPLETE until image 5/5 has been delivered. If you ever find you have stopped early, immediately continue with the next missing view.
+
+`;
+
   let p = masterPrompt;
 
   const header = 'KANABCO ST — SINGLE-VIEW RENDER FROM A FIVE-VIEW CATALOG SET.';
@@ -152,10 +165,16 @@ export function buildStPortablePrompt(masterPrompt: string): string {
 
   const oneImage = 'Output exactly ONE image containing exactly ONE product from that single viewpoint. Do NOT output a grid, a contact sheet, a collage, a turntable strip, side-by-side panels, or more than one view in the frame.';
   if (p.includes(oneImage)) {
-    p = p.replace(oneImage, 'Output exactly FIVE separate images — one per view, in the order listed above. Each individual image contains exactly ONE product seen from ONE viewpoint. Never merge views into a grid, contact sheet, collage, turntable strip, or side-by-side panels within a single image. If you can only produce one image at a time, produce them one after another in order until all five are delivered.');
+    p = p.replace(oneImage, 'Output exactly FIVE separate images — one per view, in the order listed above. Each individual image contains exactly ONE product seen from ONE viewpoint. Never merge views into a grid, contact sheet, collage, turntable strip, or side-by-side panels within a single image. Generate them one call at a time, back to back, until all five are delivered.');
   }
 
-  return p;
+  return (
+    contract +
+    p +
+    `
+
+FINAL CHECK before you consider this done: count your delivered images. There must be exactly FIVE — 1/5 ¾ Hero, 2/5 Front 0°, 3/5 Left 90°, 4/5 Back 180°, 5/5 Right 270°. If any view is missing, generate it now. Do not end with fewer than five images.`
+  );
 }
 
 /**

@@ -6,6 +6,7 @@ import { ToastProvider, useToast } from '@/components/Toast';
 import { createClient } from '@/lib/supabase-browser';
 import { fabrics, colors, shots, angles, settings, details, stViews, defaultState } from '@/lib/data';
 import { buildPrompt, buildStSetPrompts, buildStPortablePrompt, ST_VIEW_TOKEN } from '@/lib/prompts';
+import { normalizeBackgroundPixels } from '@/lib/bg-normalize';
 import { buildZip } from '@/lib/zip';
 import type { StudioState, Category, CustomProduct } from '@/lib/types';
 
@@ -143,6 +144,14 @@ async function recomposeProduct(base64: string, mime: string): Promise<{ data: s
     if (y < H - 1) seedIfBg(x, y + 1);
   }
 
+  // If the fill barely consumed anything, the backdrop isn't near #F0F0EE at
+  // all (bg pass failed badly). Recomposing would paste the whole frame as a
+  // rectangle inside an #F0F0EE field — worse than returning the input as-is.
+  if (qTail / total < 0.05) {
+    console.warn('[Recompose] flood-fill consumed only', Math.round(qTail / total * 100) + '% — backdrop not near target, skipping recompose');
+    return { data: base64, mime };
+  }
+
   // bbox of pixels with any remaining opacity. Partially-transparent
   // gradient pixels along the shadow edge stay IN so the soft falloff
   // is carried through to the final composite.
@@ -258,8 +267,38 @@ async function requestImage(prompt: string, sourceImage?: string | null, sourceM
 }
 
 /**
- * Catalog post-processing: second Gemini pass to flatten the backdrop to #F0F0EE,
- * flood-fill recomposition as the fallback, then the real logo composited on top.
+ * Deterministic background pass: samples the backdrop shade the image actually
+ * has, shifts the whole image uniformly so the field lands on the exact
+ * #F0F0EE, then softly snaps near-target pixels onto the literal hex — no
+ * rescale, no reposition, no segmentation (see lib/bg-normalize.ts for why).
+ * This is what makes all five views of a set share an identical background
+ * instead of five slightly different Gemini interpretations of the same hex.
+ * Bails out untouched whenever the image doesn't look like a product on a
+ * near-#F0F0EE field.
+ */
+async function normalizeBackground(base64: string, mime: string): Promise<GenImage> {
+  const img = await loadImage(`data:${mime};base64,${base64}`);
+  const W = img.naturalWidth;
+  const H = img.naturalHeight;
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('No canvas context');
+  ctx.drawImage(img, 0, 0);
+  const imgData = ctx.getImageData(0, 0, W, H);
+  const res = normalizeBackgroundPixels(imgData.data, W, H);
+  console.log('[BgNormalize]', res.reason, '| field:', Math.round(res.fieldFraction * 100) + '%', '| sampled backdrop:', res.medianRGB.join(','));
+  if (!res.changed) return { data: base64, mime };
+  ctx.putImageData(imgData, 0, 0);
+  return { data: canvas.toDataURL('image/png').split(',')[1], mime: 'image/png' };
+}
+
+/**
+ * Catalog post-processing: second Gemini pass pulls the backdrop close to
+ * #F0F0EE (flood-fill recomposition remains the fallback if that pass errors),
+ * then the deterministic color normalization ALWAYS runs on top so the field
+ * lands on the pixel-exact hex, then the real logo is composited on top.
  */
 async function finishCatalogImage(image: GenImage): Promise<GenImage> {
   let finalImage = image;
@@ -276,6 +315,11 @@ async function finishCatalogImage(image: GenImage): Promise<GenImage> {
     } catch (e: any) {
       console.warn('Recomposition fallback failed:', e?.message);
     }
+  }
+  try {
+    finalImage = await normalizeBackground(finalImage.data, finalImage.mime);
+  } catch (e: any) {
+    console.warn('Background normalization failed:', e?.message);
   }
   try {
     finalImage = await compositeLogo(finalImage.data, finalImage.mime);
