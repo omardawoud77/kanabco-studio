@@ -95,11 +95,17 @@ This is a camera/turntable rotation, not a redesign. Think of the piece sitting 
 - Infer the unseen sides honestly from the piece's design logic. A back at 180° should look like the genuine back of THIS sofa — same upholstery, same panel lines, same finish quality — not an invented decorative rear.
 - Every part visible in more than one view must be identical across views: same number of cushions, same seam placement, same leg style, same fabric nap direction, same colour value.
 
+GEOMETRY INTEGRITY — the full footprint survives every rotation, EXACTLY:
+- The piece's complete plan-view footprint is a fixed fact. If the piece is ASYMMETRIC — an L-sectional, a chaise end, an offset module, one arm longer than the other — that asymmetry appears in EVERY view, positioned wherever the stated rotation geometrically places it: projecting toward the camera, away from it, or to one side, possibly partially occluding or occluded. It is NEVER omitted and the piece is NEVER simplified into a symmetric sofa at any angle.
+- Just as nothing is removed, NOTHING IS ADDED. Never invent extra modules, seats, chaises, ottomans, arms, or mirrored extensions that are not in the source. An L-sectional has exactly ONE chaise on exactly ONE end — it must never become a U-shape (chaises/returns on both ends) and must never gain a floating ottoman. If the source shows N modules, every view shows exactly N modules — count them.
+- Before finishing, verify against the source: same number of modules, same number of seat and back cushions, same number of legs, same chaise/extension present on the geometrically correct side for this rotation — no parts missing, no parts invented.
+
 SET CONSISTENCY — these five images will sit in a row on a product page:
-- Identical camera distance, identical focal length feel, identical product scale in frame across all five views. The piece must not grow or shrink between angles.
-- Identical background, identical lighting setup, identical shadow softness and direction, identical colour temperature.
+- Identical camera distance, identical focal length feel, identical product scale in frame across all five views. The piece must not grow or shrink between angles. A side profile is naturally narrower than the front view — that is fine — but the piece's HEIGHT in the frame must be the same as in every other view. Never compensate for a narrow silhouette by moving the camera back or rendering the piece smaller.
+- The product is CENTRED horizontally in every view, its vertical centre at the same height in the frame in all five images. Never drift the product into a corner or the lower third of the frame.
+- Identical background COLOUR in every view: the flat white Kanabco field, exactly #F0F0EE (RGB 240,240,238) — cool near-white, never warm, never cream, never beige. If the source photo's backdrop is warmer or darker, do NOT inherit it — correct to exactly #F0F0EE. The background must be indistinguishable when the five images sit side by side.
+- Identical lighting setup, identical shadow softness and direction, identical colour temperature.
 - Identical eye level: camera slightly above the seat, level horizon, no dutch tilt, no dramatic low or high angle (the ¾ Hero looks gently down; the four elevations are level).
-- The product's vertical centre sits at the same height in the frame in all five images.
 
 ${fabricClause(state)}
 
