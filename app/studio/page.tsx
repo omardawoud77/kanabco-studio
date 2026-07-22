@@ -143,6 +143,14 @@ async function recomposeProduct(base64: string, mime: string): Promise<{ data: s
     if (y < H - 1) seedIfBg(x, y + 1);
   }
 
+  // If the fill barely consumed anything, the backdrop isn't near #F0F0EE at
+  // all (bg pass failed badly). Recomposing would paste the whole frame as a
+  // rectangle inside an #F0F0EE field — worse than returning the input as-is.
+  if (qTail / total < 0.05) {
+    console.warn('[Recompose] flood-fill consumed only', Math.round(qTail / total * 100) + '% — backdrop not near target, skipping recompose');
+    return { data: base64, mime };
+  }
+
   // bbox of pixels with any remaining opacity. Partially-transparent
   // gradient pixels along the shadow edge stay IN so the soft falloff
   // is carried through to the final composite.
@@ -258,24 +266,24 @@ async function requestImage(prompt: string, sourceImage?: string | null, sourceM
 }
 
 /**
- * Catalog post-processing: second Gemini pass to flatten the backdrop to #F0F0EE,
- * flood-fill recomposition as the fallback, then the real logo composited on top.
+ * Catalog post-processing: second Gemini pass pulls the backdrop close to
+ * #F0F0EE, then the deterministic flood-fill recompose ALWAYS runs on top —
+ * it repaints the field pixel-exact #F0F0EE and normalizes product scale and
+ * position, so every image in a set gets a literally identical background
+ * instead of five slightly different Gemini interpretations of the same hex.
+ * Finally the real logo is composited on top.
  */
 async function finishCatalogImage(image: GenImage): Promise<GenImage> {
   let finalImage = image;
-  let secondPassOk = false;
   try {
     finalImage = await requestImage(BG_REPLACE_PROMPT, finalImage.data, finalImage.mime);
-    secondPassOk = true;
   } catch (e: any) {
-    console.warn('[Studio] bg-replacement second pass FAILED, falling back to recomposeProduct:', e?.message);
+    console.warn('[Studio] bg-replacement second pass FAILED, recomposing raw output:', e?.message);
   }
-  if (!secondPassOk) {
-    try {
-      finalImage = await recomposeProduct(finalImage.data, finalImage.mime);
-    } catch (e: any) {
-      console.warn('Recomposition fallback failed:', e?.message);
-    }
+  try {
+    finalImage = await recomposeProduct(finalImage.data, finalImage.mime);
+  } catch (e: any) {
+    console.warn('Recomposition failed:', e?.message);
   }
   try {
     finalImage = await compositeLogo(finalImage.data, finalImage.mime);
