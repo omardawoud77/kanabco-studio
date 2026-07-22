@@ -240,7 +240,7 @@ const BG_REPLACE_PROMPT =
   "Do NOT add or remove anything from the image except the background color. " +
   "Keep the soft contact shadow under the product. " +
   "The result must be: the same product in the same position, just sitting on a flat #F0F0EE field instead of whatever background was there before. " +
-  "The background must be ONE single uniform colour edge to edge — absolutely no gradient, no floor line, no horizon, no darker band at the bottom, no vignette; if the source image has any of these, flatten them all into the same solid #F0F0EE. " +
+  "The final background colour must be EXACTLY #F0F0EE (RGB 240,240,238) — a cool near-white. NOT warm, NOT cream, NOT beige, NOT ivory, NOT pure white, NOT grey-blue. If the current background is warm-tinted or any other shade, correct every background pixel to exactly #F0F0EE. The background must be ONE single uniform colour edge to edge — absolutely no gradient, no floor line, no horizon, no darker band at the bottom, no vignette; if the source image has any of these, flatten them all into the same solid #F0F0EE. " +
   "Do NOT add any logos, arrows, watermarks, glyphs, icons, text, or marks anywhere in the image.";
 
 /** One Gemini image call. */
