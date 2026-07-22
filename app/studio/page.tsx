@@ -4,8 +4,8 @@ import { useState, useEffect } from 'react';
 import { NavBar } from '@/components/NavBar';
 import { ToastProvider, useToast } from '@/components/Toast';
 import { createClient } from '@/lib/supabase-browser';
-import { fabrics, colors, shots, angles, settings, details, defaultState } from '@/lib/data';
-import { buildPrompt } from '@/lib/prompts';
+import { fabrics, colors, shots, angles, settings, details, stViews, defaultState } from '@/lib/data';
+import { buildPrompt, buildStSetPrompts, ST_VIEW_TOKEN } from '@/lib/prompts';
 import type { StudioState, Category, CustomProduct } from '@/lib/types';
 
 export default function StudioPage() {
@@ -231,6 +231,67 @@ async function compositeLogo(base64: string, mime: string): Promise<{ data: stri
   return { data: canvas.toDataURL('image/png').split(',')[1], mime: 'image/png' };
 }
 
+type GenImage = { data: string; mime: string };
+
+const BG_REPLACE_PROMPT =
+  "Replace ONLY the background of this image with flat solid #F0F0EE. " +
+  "Preserve the product exactly as is — every pixel, every detail, the exact position, the exact size, the exact framing. " +
+  "Do NOT reposition, resize, recompose, or modify the product in any way. " +
+  "Do NOT add or remove anything from the image except the background color. " +
+  "Keep the soft contact shadow under the product. " +
+  "The result must be: the same product in the same position, just sitting on a flat #F0F0EE field instead of whatever background was there before. " +
+  "Do NOT add any logos, arrows, watermarks, glyphs, icons, text, or marks anywhere in the image.";
+
+/** One Gemini image call. */
+async function requestImage(prompt: string, sourceImage?: string | null, sourceMime?: string | null): Promise<GenImage> {
+  const res = await fetch('/api/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt, sourceImage: sourceImage || null, sourceMime: sourceMime || null }),
+  });
+  if (!res.ok) throw new Error((await res.text()) || 'Generation failed');
+  const result = await res.json();
+  if (!result.imageBase64) throw new Error('No image returned');
+  return { data: result.imageBase64, mime: result.mimeType || 'image/png' };
+}
+
+/**
+ * Catalog post-processing: second Gemini pass to flatten the backdrop to #F0F0EE,
+ * flood-fill recomposition as the fallback, then the real logo composited on top.
+ */
+async function finishCatalogImage(image: GenImage): Promise<GenImage> {
+  let finalImage = image;
+  let secondPassOk = false;
+  try {
+    finalImage = await requestImage(BG_REPLACE_PROMPT, finalImage.data, finalImage.mime);
+    secondPassOk = true;
+  } catch (e: any) {
+    console.warn('[Studio] bg-replacement second pass FAILED, falling back to recomposeProduct:', e?.message);
+  }
+  if (!secondPassOk) {
+    try {
+      finalImage = await recomposeProduct(finalImage.data, finalImage.mime);
+    } catch (e: any) {
+      console.warn('Recomposition fallback failed:', e?.message);
+    }
+  }
+  try {
+    finalImage = await compositeLogo(finalImage.data, finalImage.mime);
+  } catch (e: any) {
+    console.warn('Logo composite failed:', e?.message);
+  }
+  return finalImage;
+}
+
+/** One slot in the Kanabco ST five-view set. */
+type StResult = {
+  id: string;
+  name: string;
+  status: 'pending' | 'done' | 'error';
+  image?: GenImage;
+  error?: string;
+};
+
 function Studio() {
   const toast = useToast();
   const [state, setState] = useState<StudioState>(defaultState);
@@ -243,6 +304,9 @@ function Studio() {
   const [generating, setGenerating] = useState(false);
   const [generated, setGenerated] = useState<{ data: string; mime: string } | null>(null);
   const [genError, setGenError] = useState<string | null>(null);
+
+  // Kanabco ST: five views, each filled in as it lands.
+  const [stSet, setStSet] = useState<StResult[] | null>(null);
 
   const [analyzing, setAnalyzing] = useState(false);
 
@@ -281,6 +345,7 @@ function Studio() {
 
   // These shot types get the catalog treatment: recompose + logo
   const isCatalogShot = state.shot === 'brand_conversion' || state.shot === 'catalog' || state.shot === 'angle';
+  const isStSet = state.shot === 'kanabco_st';
 
   function handleFile(file: File) {
     if (!file.type.startsWith('image/')) { toast('Please choose an image file'); return; }
@@ -341,11 +406,50 @@ function Studio() {
     }
   }
 
-  async function generate() {
-    if (!prompt) { toast('Pick a product first'); return; }
+  /**
+   * KANABCO ST — fire all five views off the one master prompt. Each view is an
+   * independent chain (generate → backdrop pass → logo) so a single failure or
+   * rate-limit leaves the other four intact and retryable on its own.
+   */
+  async function runStView(view: { id: string; name: string; prompt: string }) {
+    setStSet(prev => prev?.map(r => r.id === view.id ? { ...r, status: 'pending', error: undefined } : r) ?? prev);
+    try {
+      const raw = await requestImage(view.prompt, imageFile?.data, imageFile?.mime);
+      const finished = await finishCatalogImage(raw);
+      setStSet(prev => prev?.map(r => r.id === view.id ? { ...r, status: 'done', image: finished } : r) ?? prev);
+      return true;
+    } catch (e: any) {
+      console.error(`[Studio] ST view "${view.id}" failed:`, e?.message);
+      setStSet(prev => prev?.map(r => r.id === view.id ? { ...r, status: 'error', error: e?.message || 'Failed' } : r) ?? prev);
+      return false;
+    }
+  }
+
+  async function generateStSet() {
+    if (!prompt) return;
+    const views = buildStSetPrompts(prompt);
     setGenerating(true);
     setGenError(null);
     setGenerated(null);
+    setStSet(views.map(v => ({ id: v.id, name: v.name, status: 'pending' as const })));
+
+    console.log('[Studio] KANABCO ST — generating', views.length, 'views from one master prompt');
+    const results = await Promise.all(views.map(v => runStView(v)));
+    const ok = results.filter(Boolean).length;
+
+    setGenerating(false);
+    if (ok === views.length) toast('All 5 views generated');
+    else if (ok === 0) { setGenError('Every view failed — check your Gemini quota.'); toast('Set failed'); }
+    else toast(`${ok} of ${views.length} views generated — retry the rest`);
+  }
+
+  async function generate() {
+    if (!prompt) { toast('Pick a product first'); return; }
+    if (isStSet) return generateStSet();
+    setGenerating(true);
+    setGenError(null);
+    setGenerated(null);
+    setStSet(null);
 
     // Debug: verify the prompt actually leaves the browser as expected.
     console.log(
@@ -356,73 +460,12 @@ function Studio() {
     console.log('[Studio] prompt body:\n' + prompt);
 
     try {
-      const res = await fetch('/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt,
-          sourceImage: imageFile?.data || null,
-          sourceMime: imageFile?.mime || null,
-        }),
-      });
-      if (!res.ok) throw new Error((await res.text()) || 'Generation failed');
-      const result = await res.json();
+      let finalImage = await requestImage(prompt, imageFile?.data, imageFile?.mime);
 
-      let finalImage = { data: result.imageBase64, mime: result.mimeType };
-
-      // For catalog-style shots: do a second Gemini pass that replaces the
-      // backdrop with flat #F0F0EE, then composite the logo on top. If the
-      // second pass fails for any reason, fall back to the legacy flood-fill
-      // recomposition so the demo doesn't break.
+      // For catalog-style shots: flatten the backdrop to #F0F0EE and composite
+      // the real logo on top (flood-fill recomposition is the fallback).
       if (isCatalogShot) {
-        const BG_REPLACE_PROMPT =
-          "Replace ONLY the background of this image with flat solid #F0F0EE. " +
-          "Preserve the product exactly as is — every pixel, every detail, the exact position, the exact size, the exact framing. " +
-          "Do NOT reposition, resize, recompose, or modify the product in any way. " +
-          "Do NOT add or remove anything from the image except the background color. " +
-          "Keep the soft contact shadow under the product. " +
-          "The result must be: the same product in the same position, just sitting on a flat #F0F0EE field instead of whatever background was there before. " +
-          "Do NOT add any logos, arrows, watermarks, glyphs, icons, text, or marks anywhere in the image.";
-
-        let secondPassOk = false;
-        try {
-          console.log('[Studio] POST /api/generate — second pass: bg replacement');
-          const bgRes = await fetch('/api/generate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              prompt: BG_REPLACE_PROMPT,
-              sourceImage: finalImage.data,
-              sourceMime: finalImage.mime,
-            }),
-          });
-          if (!bgRes.ok) {
-            throw new Error((await bgRes.text()) || `bg replacement returned ${bgRes.status}`);
-          }
-          const bgResult = await bgRes.json();
-          if (!bgResult.imageBase64) throw new Error('bg replacement returned no image');
-          finalImage = { data: bgResult.imageBase64, mime: bgResult.mimeType || 'image/png' };
-          secondPassOk = true;
-          console.log('[Studio] bg-replacement second pass: ok');
-        } catch (e: any) {
-          console.warn('[Studio] bg-replacement second pass FAILED, falling back to recomposeProduct:', e?.message);
-        }
-
-        // Fallback: only run the old flood-fill cutout if the second Gemini pass failed.
-        if (!secondPassOk) {
-          try {
-            finalImage = await recomposeProduct(finalImage.data, finalImage.mime);
-          } catch (e: any) {
-            console.warn('Recomposition fallback failed:', e?.message);
-          }
-        }
-
-        try {
-          finalImage = await compositeLogo(finalImage.data, finalImage.mime);
-        } catch (e: any) {
-          console.warn('Logo composite failed:', e?.message);
-          toast(e?.message || 'Could not add logo');
-        }
+        finalImage = await finishCatalogImage(finalImage);
       }
 
       setGenerated(finalImage);
@@ -435,24 +478,24 @@ function Studio() {
     }
   }
 
-  function downloadGenerated() {
-    if (!generated) return;
+  const safeName = (s: string) => s.replace(/[\/\\:*?"<>|]+/g, '-').replace(/\s+/g, '-').toLowerCase();
 
+  /** Current product's slug, for filenames. */
+  function productSlug() {
+    const productObj = state.product && state.product !== 'one_off'
+      ? products.find(p => p.id === state.product)
+      : null;
+    return safeName(productObj?.name || state.productOneOffName || 'Custom');
+  }
+
+  function downloadImage(image: { data: string; mime: string }, filename: string) {
     // base64 → Uint8Array → Blob (application/octet-stream forces Safari
     // to treat the link as a download rather than navigating to a PNG)
-    const bin = atob(generated.data);
+    const bin = atob(image.data);
     const bytes = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
     const blob = new Blob([bytes], { type: 'application/octet-stream' });
     const url = URL.createObjectURL(blob);
-
-    // Filesystem-safe filename: kanabco-<product>-<shot>-<ts>.png
-    const productObj = state.product && state.product !== 'one_off'
-      ? products.find(p => p.id === state.product)
-      : null;
-    const raw = productObj?.name || state.productOneOffName || 'Custom';
-    const safe = (s: string) => s.replace(/[\/\\:*?"<>|]+/g, '-').replace(/\s+/g, '-').toLowerCase();
-    const filename = `kanabco-${safe(raw)}-${safe(state.shot || 'image')}-${Date.now()}.png`;
 
     const a = document.createElement('a');
     a.href = url;
@@ -464,6 +507,27 @@ function Studio() {
     document.body.removeChild(a);
     // Revoke after the click has had time to start the download
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function downloadGenerated() {
+    if (!generated) return;
+    downloadImage(generated, `kanabco-${productSlug()}-${safeName(state.shot || 'image')}-${Date.now()}.png`);
+  }
+
+  /** Numbered so the five views stay in catalog order in the user's folder. */
+  async function downloadStSet() {
+    if (!stSet) return;
+    const stamp = Date.now();
+    let n = 0;
+    for (let i = 0; i < stSet.length; i++) {
+      const r = stSet[i];
+      if (!r.image) continue;
+      downloadImage(r.image, `kanabco-${productSlug()}-st-${String(i + 1).padStart(2, '0')}-${r.id}-${stamp}.png`);
+      n++;
+      // Browsers drop rapid-fire downloads; space them out.
+      await new Promise(res => setTimeout(res, 350));
+    }
+    toast(n === 1 ? '1 image downloaded' : `${n} images downloaded`);
   }
 
   function copyPrompt() {
@@ -642,6 +706,26 @@ function Studio() {
           </select>
         </Section>
       )}
+      {isStSet && (
+        <Section num="04b" title="The set" hint="5 images · 1 prompt">
+          <div className="bg-bg-card border border-border rounded-lg p-4">
+            <p className="text-xs text-text-muted leading-relaxed mb-3">
+              One master prompt below, rendered five times — once per angle. Every view shares the same
+              brand block, so the set comes back as one shoot instead of five unrelated renders.
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+              {stViews.map(v => (
+                <div key={v.id} className="border border-border rounded-md px-2 py-2 text-center bg-bg-soft">
+                  <div className="font-semibold text-xs">{v.name}</div>
+                  {v.required && (
+                    <div className="text-[10px] uppercase tracking-wider text-orange mt-0.5">required</div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        </Section>
+      )}
       {state.shot === 'lifestyle' && (
         <Section num="04b" title="Setting">
           <select className="select" value={state.setting} onChange={e => setState(s => ({ ...s, setting: e.target.value }))}>
@@ -696,7 +780,15 @@ function Studio() {
           className="w-full font-mono text-[12.5px] leading-relaxed bg-transparent text-white/90 placeholder-white/40 placeholder:italic placeholder:font-sans focus:outline-none resize-y min-h-[200px]"
         />
         <div className="text-[10px] text-white/40 mt-2">
-          Edit this text to tweak what Gemini receives. Changes are sent on Generate.
+          {isStSet ? (
+            <>
+              Edit this master prompt and all 5 views inherit the change. Keep the{' '}
+              <code className="text-orange">{ST_VIEW_TOKEN}</code> token — it&apos;s where each angle gets
+              swapped in.
+            </>
+          ) : (
+            'Edit this text to tweak what Gemini receives. Changes are sent on Generate.'
+          )}
         </div>
       </div>
 
@@ -705,8 +797,72 @@ function Studio() {
         disabled={!prompt || generating}
         className="btn btn-primary w-full text-base py-3.5 mb-6"
       >
-        {generating ? '✦ Generating image…' : '✦ Generate image with Gemini'}
+        {generating
+          ? (isStSet ? '✦ Generating 5 views…' : '✦ Generating image…')
+          : (isStSet ? '✦ Generate all 5 views with Gemini' : '✦ Generate image with Gemini')}
       </button>
+
+      {stSet && (
+        <div className="bg-bg-card border border-border rounded-2xl p-6 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="font-serif italic text-lg">
+              Kanabco ST
+              <span className="text-xs text-text-muted ml-2 not-italic">
+                · {stSet.filter(r => r.status === 'done').length} of {stSet.length} · recomposed + logo
+              </span>
+            </div>
+            <button
+              onClick={downloadStSet}
+              disabled={!stSet.some(r => r.image)}
+              className="btn btn-secondary text-xs disabled:opacity-40"
+            >
+              ↓ Download all
+            </button>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+            {stSet.map(r => (
+              <div key={r.id}>
+                <div className="aspect-[2/3] rounded-lg border border-border overflow-hidden bg-bg-soft flex items-center justify-center">
+                  {r.status === 'done' && r.image ? (
+                    <img
+                      src={`data:${r.image.mime};base64,${r.image.data}`}
+                      alt={r.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : r.status === 'error' ? (
+                    <div className="text-center px-2">
+                      <div className="text-xs text-red-700 mb-1">Failed</div>
+                      <button
+                        onClick={() => runStView(buildStSetPrompts(prompt || '').find(v => v.id === r.id)!)}
+                        className="text-[11px] text-orange hover:underline"
+                      >
+                        ↻ Retry
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="text-xs text-text-faint animate-pulse">rendering…</div>
+                  )}
+                </div>
+                <div className="flex items-center justify-between mt-1.5 gap-1">
+                  <span className="text-xs font-medium truncate">{r.name}</span>
+                  {r.image && (
+                    <button
+                      onClick={() => downloadImage(r.image!, `kanabco-${productSlug()}-st-${r.id}-${Date.now()}.png`)}
+                      className="text-[11px] text-text-muted hover:text-orange shrink-0"
+                      title={`Download ${r.name}`}
+                    >
+                      ↓
+                    </button>
+                  )}
+                </div>
+                {r.status === 'error' && r.error && (
+                  <div className="text-[10px] text-text-faint mt-0.5 truncate" title={r.error}>{r.error}</div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {generated && (
         <div className="bg-bg-card border border-border rounded-2xl p-6 mb-6">

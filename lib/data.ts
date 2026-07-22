@@ -45,7 +45,44 @@ export const shots: Shot[] = [
   { id: 'catalog', name: 'Catalog', icon: '▢', desc: 'Same angle, new fabric' },
   { id: 'detail', name: 'Detail close-up', icon: '◉', desc: 'Tactile texture shot' },
   { id: 'lifestyle', name: 'Lifestyle scene', icon: '⌂', desc: 'Full room context' },
-  { id: 'angle', name: 'New angle', icon: '↻', desc: 'Different camera view' }
+  { id: 'angle', name: 'New angle', icon: '↻', desc: 'Different camera view' },
+  { id: 'kanabco_st', name: 'Kanabco ST', icon: '⬚', desc: 'All 5 angles, one click' }
+];
+
+// The Kanabco ST set — one source photo in, five catalog views out.
+// Turntable convention: the product rotates, the camera stays put.
+// 0° = front of the piece faces the camera.
+export const stViews = [
+  {
+    id: 'hero',
+    name: '¾ Hero',
+    required: true,
+    desc: 'a three-quarter hero view — the piece rotated roughly 35° so the camera sees the front and one full side at once, camera slightly above seat height looking gently down. This is the signature Kanabco hero angle: the most flattering read of the silhouette, depth and volume all visible in one frame.'
+  },
+  {
+    id: 'front_0',
+    name: 'Front 0°',
+    required: false,
+    desc: 'a perfectly head-on straight-front elevation at 0° — the camera dead-centre and square to the front face of the piece, zero rotation, zero perspective skew. Left and right sides are equally hidden; you see the front face flat-on, like an architectural elevation drawing.'
+  },
+  {
+    id: 'left_90',
+    name: 'Left 90°',
+    required: false,
+    desc: 'the left side profile at 90° — the piece rotated a quarter turn so its LEFT end faces the camera. You see the side silhouette only: the depth profile, the arm or end panel, the back edge behind it. The front face is NOT visible.'
+  },
+  {
+    id: 'back_180',
+    name: 'Back 180°',
+    required: false,
+    desc: 'the rear elevation at 180° — the piece rotated a half turn so the camera sees the BACK of the piece square-on. Show how the back is finished: the outside back panel, seams, the top edge of the backrest from behind. The front face and seat interior are NOT visible.'
+  },
+  {
+    id: 'right_270',
+    name: 'Right 270°',
+    required: false,
+    desc: 'the right side profile at 270° — the piece rotated three-quarters of a turn so its RIGHT end faces the camera. The mirror opposite of the Left 90° view: side silhouette only, front face NOT visible.'
+  }
 ];
 
 export const angles = [
